@@ -1,4 +1,4 @@
-# pi-memories sync script (PowerShell)
+# agents memory sync script (PowerShell)
 # Usage: .\sync\sync.ps1 [-Message "custom message"]
 
 param(

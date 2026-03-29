@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pi-memories sync script — pull latest then push any local changes
+# agents memory sync script — pull latest then push any local changes
 # Usage: bash sync/sync.sh [commit-message]
 
 set -euo pipefail
