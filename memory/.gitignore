@@ -1,0 +1,7 @@
+# cass index is rebuilt locally — don't sync large index files
+cass/*.db
+cass/*.idx
+
+# temp files
+*.tmp
+*.bak
