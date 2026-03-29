@@ -4,14 +4,14 @@
 # and runs a verification pass.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_USER/agents/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/shuff57/agents/main/install.sh | bash
 #   # or after cloning:
 #   bash install.sh
 
 set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
-REPO_URL="${AGENTS_REPO_URL:-https://github.com/YOUR_USER/agents.git}"
+REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agents.git}"
 INSTALL_DIR="${AGENTS_DIR:-$HOME/agents}"
 CLAUDE_AGENTS="$HOME/.claude/agents"
 OPENCODE_AGENTS="$HOME/.config/opencode/superpowers/agents"

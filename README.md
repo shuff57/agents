@@ -6,12 +6,12 @@ Unified agent framework — 29 agents, 13 teams, 11 chains, 38 skills, persisten
 
 **One-liner** (clone + symlink + verify):
 ```bash
-git clone https://github.com/YOUR_USER/agents.git ~/agents && bash ~/agents/install.sh
+git clone https://github.com/shuff57/agents.git ~/agents && bash ~/agents/install.sh
 ```
 
 **Or step by step:**
 ```bash
-git clone https://github.com/YOUR_USER/agents.git ~/agents
+git clone https://github.com/shuff57/agents.git ~/agents
 cd ~/agents
 bash install.sh    # detects tools, symlinks, verifies
 bash test.sh       # runs full test suite
