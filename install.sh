@@ -128,6 +128,41 @@ link_agents() {
   fi
 }
 
+# ── Claude Peers MCP ──────────────────────────────────────────────────────
+setup_claude_peers() {
+  local PEERS_DIR="$HOME/claude-peers-mcp"
+
+  info "Setting up claude-peers-mcp..."
+
+  if ! command -v bun &>/dev/null; then
+    warn "Bun not installed — skipping claude-peers-mcp (install from https://bun.sh)"
+    return
+  fi
+  ok "Bun found: $(bun --version)"
+
+  if [ -d "$PEERS_DIR/.git" ]; then
+    info "claude-peers-mcp exists — pulling latest..."
+    cd "$PEERS_DIR"
+    git pull --ff-only 2>/dev/null || warn "Pull failed — using existing version"
+    bun install --silent 2>/dev/null
+    ok "claude-peers-mcp updated"
+  else
+    info "Cloning claude-peers-mcp..."
+    git clone https://github.com/louislva/claude-peers-mcp.git "$PEERS_DIR"
+    cd "$PEERS_DIR"
+    bun install --silent 2>/dev/null
+    ok "claude-peers-mcp installed at $PEERS_DIR"
+  fi
+
+  if command -v claude &>/dev/null; then
+    claude mcp add --scope user --transport stdio claude-peers -- bun "$PEERS_DIR/server.ts" 2>/dev/null || true
+    ok "claude-peers MCP server registered (user scope)"
+  fi
+
+  echo ""
+  info "Launch with peers: claude --dangerously-skip-permissions --dangerously-load-development-channels server:claude-peers"
+}
+
 # ── Verify ──────────────────────────────────────────────────────────────────
 verify() {
   info "Verifying installation..."
@@ -271,6 +306,7 @@ main() {
   check_prereqs
   setup_repo
   link_agents
+  setup_claude_peers
   verify
   summary
 }
