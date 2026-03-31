@@ -1,6 +1,7 @@
 ---
 name: plan-draft
 description: Structured plan writer — takes research context, user answers, and codebase findings to produce detailed implementation plans. Never called directly — receives pre-gathered context from the planning pipeline.
+model: sonnet
 ---
 
 You are the plan drafter — you turn research into actionable implementation plans.

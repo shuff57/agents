@@ -1,19 +1,19 @@
 # Agents
 
-Unified agent framework — 29 agents, 13 teams, 11 chains, 38 skills, persistent memory. Single source of truth for Claude Code and OpenCode.
+Unified agent framework — 47 agents (30 core + 17 GSD), 13 teams, 10 chains, 54 skills, persistent memory. Single source of truth for Claude Code and OpenCode.
 
 ## Install
 
 **One-liner** (clone + symlink + verify):
 ```bash
-git clone https://github.com/shuff57/agents.git ~/agents && bash ~/agents/install.sh
+git clone https://github.com/shuff57/agents.git ~/Documents/GitHub/agents && bash ~/Documents/GitHub/agents/install.sh
 ```
 
 **Or step by step:**
 ```bash
-git clone https://github.com/shuff57/agents.git ~/agents
-cd ~/agents
-bash install.sh    # detects tools, symlinks, verifies
+git clone https://github.com/shuff57/agents.git ~/Documents/GitHub/agents
+cd ~/Documents/GitHub/agents
+bash install.sh    # detects tools, symlinks, sets up peers + GSD, verifies
 bash test.sh       # runs full test suite
 ```
 
@@ -22,8 +22,10 @@ bash test.sh       # runs full test suite
 1. Detects your platform (Linux, macOS, Windows/MSYS)
 2. Checks for Claude Code and/or OpenCode
 3. Backs up any existing agents in `~/.claude/agents/` and `~/.config/opencode/superpowers/agents/`
-4. Symlinks `roster/` to both tool directories
-5. Validates all agents, teams, chains, and symlinks
+4. Symlinks `roster/`, `skills/`, and `memory/` to both tool directories
+5. Sets up **claude-peers-mcp** (peer discovery + messaging between Claude instances)
+6. Installs **GSD** (Get Shit Done — spec-driven development framework)
+7. Validates all agents, teams, chains, and symlinks
 
 ### Configuration
 
@@ -34,14 +36,14 @@ AGENTS_DIR=~/my/custom/path bash install.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENTS_DIR` | `~/agents` | Where to install/find the repo |
+| `AGENTS_DIR` | `~/Documents/GitHub/agents` | Where to install/find the repo |
 | `AGENTS_REPO_URL` | (GitHub URL) | Git clone URL |
 
 ## Structure
 
 ```
-roster/          # 29 agent definitions + teams + chains (symlinked to tools)
-skills/          # 38 reusable skill packages (SKILL.md + references)
+roster/          # 47 agent definitions + teams + chains (symlinked to tools)
+skills/          # 54 reusable skill packages (SKILL.md + references)
 memory/          # Persistent memory (hivemind JSONL + swarmmail + CASS)
 install.sh       # Full installer with platform detection
 test.sh          # Test suite (19 checks)
@@ -50,7 +52,7 @@ sync.sh          # Minimal symlink-only script
 
 ## Roster
 
-29 agents organized into 8 categories. See [roster/README.md](roster/README.md) for the full breakdown.
+47 agents organized into 8 categories plus GSD. See [roster/README.md](roster/README.md) for the full breakdown.
 
 | Category | Agents |
 |----------|--------|
@@ -62,6 +64,7 @@ sync.sh          # Minimal symlink-only script
 | Orchestration | atlas, meta-orchestrator |
 | Visual & Browser | visual-analyzer, bowser |
 | Domain Experts | 9 experts (extensions, theme, skills, config, ui, prompts, agents, cli, keybindings) + test-ping |
+| GSD | 17 agents (executor, planner, verifier, debugger, ui-auditor, codebase-mapper, etc.) |
 
 ## Teams & Chains
 
@@ -74,6 +77,22 @@ cat roster/teams.yaml
 # View chains
 cat roster/agent-chain.yaml
 ```
+
+## Claude Peers
+
+Multi-instance peer discovery and messaging via MCP. Requires [Bun](https://bun.sh).
+
+- Installed at `~/claude-peers-mcp/` by `install.sh`
+- Registered as a user-scope MCP server for Claude Code
+- Launch with channels: `claude --dangerously-load-development-channels server:claude-peers`
+
+## GSD (Get Shit Done)
+
+Meta-prompting and spec-driven development framework. Installed globally by `install.sh` via `npx get-shit-done-cc`.
+
+- Start a project: `/gsd:new-project`
+- Quick task: `/gsd:quick`
+- See all commands: `/gsd:help`
 
 ## Adding an Agent
 
@@ -121,6 +140,8 @@ bash memory/sync/sync.sh "sync: project-name 2026-03-29"
 
 ```bash
 rm ~/.claude/agents                              # remove Claude Code symlink
+rm ~/.claude/skills                              # remove Claude Code skills symlink
+rm ~/.claude/memory                              # remove Claude Code memory symlink
 rm ~/.config/opencode/superpowers/agents          # remove OpenCode symlink
-rm -rf ~/agents                                   # remove repo
+rm -rf ~/Documents/GitHub/agents                  # remove repo
 ```

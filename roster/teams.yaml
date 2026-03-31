@@ -73,3 +73,25 @@ research-plan-build:
   - planner
   - prometheus
   - critic
+
+ultrawork:
+  - scout
+  - planner
+  - critic
+  - prometheus
+
+quality:
+  - qa-tester
+  - critic
+  - reviewer
+  - red-team
+
+design:
+  - designer
+  - code-engineer
+  - reviewer
+
+debug:
+  - debugger
+  - scout
+  - oracle

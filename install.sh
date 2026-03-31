@@ -12,9 +12,9 @@ set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
 REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agents.git}"
-INSTALL_DIR="${AGENTS_DIR:-$HOME/agents}"
-CLAUDE_AGENTS="$HOME/.claude/agents"
-OPENCODE_AGENTS="$HOME/.config/opencode/superpowers/agents"
+INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agents}"
+CLAUDE_DIR="$HOME/.claude"
+OPENCODE_DIR="$HOME/.config/opencode/superpowers"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -94,13 +94,14 @@ setup_repo() {
 # ── Backup and symlink ─────────────────────────────────────────────────────
 backup_and_link() {
   local target="$1"
-  local label="$2"
+  local source="$2"
+  local label="$3"
 
   # Already correctly linked
   if [ -L "$target" ]; then
     local current
     current="$(readlink "$target" 2>/dev/null || readlink -f "$target" 2>/dev/null)"
-    if [ "$current" = "$INSTALL_DIR/roster" ]; then
+    if [ "$current" = "$source" ]; then
       ok "$label already linked"
       return
     fi
@@ -112,19 +113,32 @@ backup_and_link() {
   fi
 
   mkdir -p "$(dirname "$target")"
-  ln -sfn "$INSTALL_DIR/roster" "$target"
-  ok "$label linked -> $INSTALL_DIR/roster"
+
+  if [ "$PLATFORM" = "windows" ]; then
+    # ln -sfn doesn't create real symlinks on Windows; use junctions via PowerShell
+    local win_target win_source
+    win_target="$(cygpath -w "$target")"
+    win_source="$(cygpath -w "$source")"
+    powershell -Command "New-Item -ItemType Junction -Path '$win_target' -Target '$win_source'" > /dev/null
+  else
+    ln -sfn "$source" "$target"
+  fi
+  ok "$label linked -> $source"
 }
 
-link_agents() {
-  info "Linking agent roster..."
+link_all() {
+  info "Linking agents, skills, and memory..."
 
   if command -v claude &>/dev/null; then
-    backup_and_link "$CLAUDE_AGENTS" "Claude Code agents"
+    backup_and_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents"
+    backup_and_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills"
+    backup_and_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory"
   fi
 
   if command -v opencode &>/dev/null; then
-    backup_and_link "$OPENCODE_AGENTS" "OpenCode agents"
+    backup_and_link "$OPENCODE_DIR/agents" "$INSTALL_DIR/roster" "OpenCode agents"
+    backup_and_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills"
+    backup_and_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory"
   fi
 }
 
@@ -154,6 +168,15 @@ setup_claude_peers() {
     ok "claude-peers-mcp installed at $PEERS_DIR"
   fi
 
+  # Fix Windows path issue: new URL().pathname produces "/C:/..." which bun can't resolve
+  if [ "$PLATFORM" = "windows" ]; then
+    if grep -q 'new URL("./broker.ts", import.meta.url).pathname' "$PEERS_DIR/server.ts" 2>/dev/null; then
+      info "Patching broker path for Windows..."
+      sed -i 's|const BROKER_SCRIPT = new URL("./broker.ts", import.meta.url).pathname;|const BROKER_SCRIPT = (() => {\n  const raw = new URL("./broker.ts", import.meta.url).pathname;\n  return raw.match(/^\\/[A-Za-z]:/) ? raw.slice(1) : raw;\n})();|' "$PEERS_DIR/server.ts"
+      ok "Patched broker path for Windows"
+    fi
+  fi
+
   if command -v claude &>/dev/null; then
     claude mcp add --scope user --transport stdio claude-peers -- bun "$PEERS_DIR/server.ts" 2>/dev/null || true
     ok "claude-peers MCP server registered (user scope)"
@@ -161,6 +184,26 @@ setup_claude_peers() {
 
   echo ""
   info "Launch with peers: claude --dangerously-skip-permissions --dangerously-load-development-channels server:claude-peers"
+}
+
+# ── GSD (Get Shit Done) ──────────────────────────────────────────────────
+setup_gsd() {
+  info "Setting up GSD (Get Shit Done)..."
+
+  if ! command -v npx &>/dev/null; then
+    warn "npx not found — skipping GSD (install Node.js from https://nodejs.org)"
+    return
+  fi
+
+  if command -v claude &>/dev/null; then
+    npx get-shit-done-cc --claude --global 2>&1
+    ok "GSD installed for Claude Code"
+  fi
+
+  if command -v opencode &>/dev/null; then
+    npx get-shit-done-cc --opencode --global 2>&1
+    ok "GSD installed for OpenCode"
+  fi
 }
 
 # ── Verify ──────────────────────────────────────────────────────────────────
@@ -203,21 +246,63 @@ verify() {
     errors=$((errors + 1))
   fi
 
+  # Count skills
+  local skill_count
+  skill_count=$(ls -d "$INSTALL_DIR/skills/"*/ 2>/dev/null | wc -l)
+  if [ "$skill_count" -lt 10 ]; then
+    fail "Expected 10+ skills, found $skill_count"
+    errors=$((errors + 1))
+  else
+    ok "$skill_count skills in skills/"
+  fi
+
+  # Check memory dir
+  if [ -d "$INSTALL_DIR/memory/hivemind" ]; then
+    ok "Memory directory found"
+  else
+    fail "Memory directory missing hivemind/"
+    errors=$((errors + 1))
+  fi
+
   # Verify symlinks resolve
   if command -v claude &>/dev/null; then
-    if [ -f "$CLAUDE_AGENTS/test-ping.md" ]; then
+    if [ -f "$CLAUDE_DIR/agents/test-ping.md" ]; then
       ok "Claude Code can see agents"
     else
-      fail "Claude Code agents dir doesn't contain test-ping.md"
+      fail "Claude Code agents link broken"
+      errors=$((errors + 1))
+    fi
+    if [ -d "$CLAUDE_DIR/skills/playwriter" ]; then
+      ok "Claude Code can see skills"
+    else
+      fail "Claude Code skills link broken"
+      errors=$((errors + 1))
+    fi
+    if [ -d "$CLAUDE_DIR/memory/hivemind" ]; then
+      ok "Claude Code can see memory"
+    else
+      fail "Claude Code memory link broken"
       errors=$((errors + 1))
     fi
   fi
 
   if command -v opencode &>/dev/null; then
-    if [ -f "$OPENCODE_AGENTS/test-ping.md" ]; then
+    if [ -f "$OPENCODE_DIR/agents/test-ping.md" ]; then
       ok "OpenCode can see agents"
     else
-      fail "OpenCode agents dir doesn't contain test-ping.md"
+      fail "OpenCode agents link broken"
+      errors=$((errors + 1))
+    fi
+    if [ -d "$OPENCODE_DIR/skills/playwriter" ]; then
+      ok "OpenCode can see skills"
+    else
+      fail "OpenCode skills link broken"
+      errors=$((errors + 1))
+    fi
+    if [ -d "$OPENCODE_DIR/memory/hivemind" ]; then
+      ok "OpenCode can see memory"
+    else
+      fail "OpenCode memory link broken"
       errors=$((errors + 1))
     fi
   fi
@@ -282,15 +367,27 @@ summary() {
   echo "  Memory:  $INSTALL_DIR/memory/"
   echo ""
   if command -v claude &>/dev/null; then
-    echo "  Claude Code: $CLAUDE_AGENTS -> roster/"
+    echo "  Claude Code:"
+    echo "    agents -> $INSTALL_DIR/roster/"
+    echo "    skills -> $INSTALL_DIR/skills/"
+    echo "    memory -> $INSTALL_DIR/memory/"
   fi
   if command -v opencode &>/dev/null; then
-    echo "  OpenCode:    $OPENCODE_AGENTS -> roster/"
+    echo "  OpenCode:"
+    echo "    agents -> $INSTALL_DIR/roster/"
+    echo "    skills -> $INSTALL_DIR/skills/"
+    echo "    memory -> $INSTALL_DIR/memory/"
   fi
   echo ""
-  echo "  Edit agents in roster/, both tools see changes instantly."
+  if [ -d "$HOME/claude-peers-mcp" ]; then
+    echo "  Claude Peers: $HOME/claude-peers-mcp (MCP registered)"
+  fi
+  echo ""
+  echo "  Edit agents/skills/memory in the repo — all tools see changes instantly."
   echo ""
   echo "  Quick test:  claude -p 'use the test-ping agent'"
+  echo "  GSD:         /gsd:new-project"
+  echo "  Peers:       claude --dangerously-load-development-channels server:claude-peers"
   echo ""
 }
 
@@ -305,8 +402,9 @@ main() {
   detect_platform
   check_prereqs
   setup_repo
-  link_agents
+  link_all
   setup_claude_peers
+  setup_gsd
   verify
   summary
 }
