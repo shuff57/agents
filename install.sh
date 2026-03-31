@@ -127,12 +127,34 @@ backup_and_link() {
 }
 
 link_all() {
-  info "Linking agents, skills, and memory..."
+  info "Linking agents, skills, memory, commands, and hooks..."
 
   if command -v claude &>/dev/null; then
     backup_and_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents"
     backup_and_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills"
     backup_and_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory"
+
+    # Link custom commands (ultrawork, deep-interview, etc.)
+    if [ -d "$INSTALL_DIR/commands" ]; then
+      for cmd in "$INSTALL_DIR/commands/"*.md; do
+        [ -f "$cmd" ] || continue
+        local cmd_name
+        cmd_name="$(basename "$cmd")"
+        cp -f "$cmd" "$CLAUDE_DIR/commands/$cmd_name"
+      done
+      ok "Claude Code commands synced"
+    fi
+
+    # Link custom hooks
+    if [ -d "$INSTALL_DIR/hooks" ]; then
+      for hook in "$INSTALL_DIR/hooks/"*; do
+        [ -f "$hook" ] || continue
+        local hook_name
+        hook_name="$(basename "$hook")"
+        cp -f "$hook" "$CLAUDE_DIR/hooks/$hook_name"
+      done
+      ok "Claude Code hooks synced"
+    fi
   fi
 
   if command -v opencode &>/dev/null; then
