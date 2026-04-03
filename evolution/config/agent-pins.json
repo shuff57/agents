@@ -1,0 +1,5 @@
+{
+  "_comment": "Agents and skills marked as pinned (non-evolvable). The evolver skips these entirely.",
+  "pinned_agents": [],
+  "pinned_skills": []
+}

@@ -4,15 +4,15 @@
 # and runs a verification pass.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/shuff57/agents/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/shuff57/agent-evo/main/install.sh | bash
 #   # or after cloning:
 #   bash install.sh
 
 set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
-REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agents.git}"
-INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agents}"
+REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agent-evo.git}"
+INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agent-evo}"
 CLAUDE_DIR="$HOME/.claude"
 OPENCODE_DIR="$HOME/.config/opencode/superpowers"
 
@@ -164,68 +164,72 @@ link_all() {
   fi
 }
 
-# ── Claude Peers MCP ──────────────────────────────────────────────────────
-setup_claude_peers() {
-  local PEERS_DIR="$HOME/claude-peers-mcp"
+# ── Evolution Engine ───────────────────────────────────────────────────────
+install_evolution() {
+  info "Installing evolution engine..."
 
-  info "Setting up claude-peers-mcp..."
+  OPENCODE_PLUGINS="$HOME/.config/opencode/plugins"
 
-  if ! command -v bun &>/dev/null; then
-    warn "Bun not installed — skipping claude-peers-mcp (install from https://bun.sh)"
-    return
-  fi
-  ok "Bun found: $(bun --version)"
-
-  if [ -d "$PEERS_DIR/.git" ]; then
-    info "claude-peers-mcp exists — pulling latest..."
-    cd "$PEERS_DIR"
-    git pull --ff-only 2>/dev/null || warn "Pull failed — using existing version"
-    bun install --silent 2>/dev/null
-    ok "claude-peers-mcp updated"
-  else
-    info "Cloning claude-peers-mcp..."
-    git clone https://github.com/louislva/claude-peers-mcp.git "$PEERS_DIR"
-    cd "$PEERS_DIR"
-    bun install --silent 2>/dev/null
-    ok "claude-peers-mcp installed at $PEERS_DIR"
+  # Symlink evolution plugin to OpenCode plugins directory
+  if command -v opencode &>/dev/null; then
+    backup_and_link "$OPENCODE_PLUGINS/evolution-engine" "$INSTALL_DIR/evolution/plugin" "Evolution engine plugin"
   fi
 
-  # Fix Windows path issue: new URL().pathname produces "/C:/..." which bun can't resolve
-  if [ "$PLATFORM" = "windows" ]; then
-    if grep -q 'new URL("./broker.ts", import.meta.url).pathname' "$PEERS_DIR/server.ts" 2>/dev/null; then
-      info "Patching broker path for Windows..."
-      sed -i 's|const BROKER_SCRIPT = new URL("./broker.ts", import.meta.url).pathname;|const BROKER_SCRIPT = (() => {\n  const raw = new URL("./broker.ts", import.meta.url).pathname;\n  return raw.match(/^\\/[A-Za-z]:/) ? raw.slice(1) : raw;\n})();|' "$PEERS_DIR/server.ts"
-      ok "Patched broker path for Windows"
+  # Install Hermes memory backend
+  if [ -f "$INSTALL_DIR/requirements.txt" ]; then
+    if command -v pip &>/dev/null; then
+      info "Installing Hermes memory backend..."
+      pip install -r "$INSTALL_DIR/requirements.txt" --quiet 2>/dev/null && ok "Hermes installed" || warn "Hermes install failed — memory will use fallback JSONL"
+    elif command -v pip3 &>/dev/null; then
+      info "Installing Hermes memory backend..."
+      pip3 install -r "$INSTALL_DIR/requirements.txt" --quiet 2>/dev/null && ok "Hermes installed" || warn "Hermes install failed — memory will use fallback JSONL"
+    else
+      warn "pip not found — skipping Hermes install (memory will use fallback JSONL)"
     fi
   fi
 
-  if command -v claude &>/dev/null; then
-    claude mcp add --scope user --transport stdio claude-peers -- bun "$PEERS_DIR/server.ts" 2>/dev/null || true
-    ok "claude-peers MCP server registered (user scope)"
+  # Install plugin dependencies
+  if [ -f "$INSTALL_DIR/evolution/plugin/package.json" ]; then
+    info "Installing plugin dependencies..."
+    if command -v bun &>/dev/null; then
+      (cd "$INSTALL_DIR/evolution/plugin" && bun install --silent 2>/dev/null) && ok "Plugin deps installed (bun)" || warn "Plugin deps install failed"
+    elif command -v npm &>/dev/null; then
+      (cd "$INSTALL_DIR/evolution/plugin" && npm install --silent 2>/dev/null) && ok "Plugin deps installed (npm)" || warn "Plugin deps install failed"
+    else
+      warn "Neither bun nor npm found — plugin deps not installed"
+    fi
   fi
 
-  echo ""
-  info "Launch with peers: claude --dangerously-skip-permissions --dangerously-load-development-channels server:claude-peers"
-}
+  # Create _workspace directories (gitignored, device-local)
+  mkdir -p "$INSTALL_DIR/_workspace/_metrics"
+  mkdir -p "$INSTALL_DIR/_workspace/_evolution_staged"
+  mkdir -p "$INSTALL_DIR/_workspace/_deprecated_skills"
+  mkdir -p "$INSTALL_DIR/_workspace/_skill_audit"
+  mkdir -p "$INSTALL_DIR/_workspace/_memory"
+  ok "Workspace directories created"
 
-# ── GSD (Get Shit Done) ──────────────────────────────────────────────────
-setup_gsd() {
-  info "Setting up GSD (Get Shit Done)..."
-
-  if ! command -v npx &>/dev/null; then
-    warn "npx not found — skipping GSD (install Node.js from https://nodejs.org)"
-    return
+  # Create gen-0 factory snapshot if it doesn't exist
+  if [ ! -d "$INSTALL_DIR/evolution/backups/gen-0" ]; then
+    info "Creating gen-0 factory snapshot..."
+    mkdir -p "$INSTALL_DIR/evolution/backups/gen-0"
+    cp "$INSTALL_DIR/roster/"*.md "$INSTALL_DIR/evolution/backups/gen-0/" 2>/dev/null
+    cp "$INSTALL_DIR/roster/teams.yaml" "$INSTALL_DIR/evolution/backups/gen-0/" 2>/dev/null
+    cp "$INSTALL_DIR/roster/agent-chain.yaml" "$INSTALL_DIR/evolution/backups/gen-0/" 2>/dev/null
+    ok "Gen-0 factory snapshot created ($(ls "$INSTALL_DIR/evolution/backups/gen-0/" | wc -l) files)"
+  else
+    ok "Gen-0 factory snapshot already exists"
   fi
 
-  if command -v claude &>/dev/null; then
-    npx get-shit-done-cc --claude --global 2>&1
-    ok "GSD installed for Claude Code"
+  # Ensure .gitignore covers _workspace
+  if [ -f "$INSTALL_DIR/.gitignore" ]; then
+    if ! grep -q "_workspace" "$INSTALL_DIR/.gitignore"; then
+      echo "_workspace/" >> "$INSTALL_DIR/.gitignore"
+      echo "evolution/plugin/node_modules/" >> "$INSTALL_DIR/.gitignore"
+      ok "Updated .gitignore"
+    fi
   fi
 
-  if command -v opencode &>/dev/null; then
-    npx get-shit-done-cc --opencode --global 2>&1
-    ok "GSD installed for OpenCode"
-  fi
+  ok "Evolution engine installed"
 }
 
 # ── Verify ──────────────────────────────────────────────────────────────────
@@ -368,6 +372,55 @@ verify() {
     ok "All team references resolve to agent files"
   fi
 
+  # Verify evolution engine
+  info "Checking evolution engine..."
+  if [ -f "$INSTALL_DIR/roster/evolver.md" ]; then
+    ok "evolver.md found in roster"
+  else
+    fail "evolver.md missing from roster"
+    errors=$((errors + 1))
+  fi
+
+  for efile in index.ts observability.ts safety-guard.ts rollback.ts drift-detector.ts hermes-bridge.ts; do
+    if [ -f "$INSTALL_DIR/evolution/plugin/$efile" ]; then
+      ok "evolution/plugin/$efile found"
+    else
+      fail "evolution/plugin/$efile missing"
+      errors=$((errors + 1))
+    fi
+  done
+
+  for cfile in safety-checksums.json agent-pins.json model-pricing.json hermes.yaml; do
+    if [ -f "$INSTALL_DIR/evolution/config/$cfile" ]; then
+      ok "evolution/config/$cfile found"
+    else
+      fail "evolution/config/$cfile missing"
+      errors=$((errors + 1))
+    fi
+  done
+
+  if [ -d "$INSTALL_DIR/evolution/backups/gen-0" ]; then
+    ok "Gen-0 factory snapshot exists"
+  else
+    fail "Gen-0 factory snapshot missing"
+    errors=$((errors + 1))
+  fi
+
+  if command -v opencode &>/dev/null; then
+    if [ -f "$OPENCODE_PLUGINS/evolution-engine/index.ts" ] 2>/dev/null; then
+      ok "Evolution plugin symlink works"
+    else
+      fail "Evolution plugin symlink broken"
+      errors=$((errors + 1))
+    fi
+  fi
+
+  if grep -q "_workspace" "$INSTALL_DIR/.gitignore" 2>/dev/null; then
+    ok "_workspace is gitignored"
+  else
+    warn "_workspace not in .gitignore"
+  fi
+
   echo ""
   if [ "$errors" -eq 0 ] && [ "$bad_agents" -eq 0 ] && [ "$orphans" -eq 0 ]; then
     echo -e "${GREEN}Installation verified successfully.${NC}"
@@ -401,15 +454,18 @@ summary() {
     echo "    memory -> $INSTALL_DIR/memory/"
   fi
   echo ""
-  if [ -d "$HOME/claude-peers-mcp" ]; then
-    echo "  Claude Peers: $HOME/claude-peers-mcp (MCP registered)"
+  if [ -d "$INSTALL_DIR/evolution/plugin" ]; then
+    echo "  Evolution Engine:"
+    echo "    plugin -> ~/.config/opencode/plugins/evolution-engine/"
+    echo "    config -> $INSTALL_DIR/evolution/config/"
+    echo "    backups -> $INSTALL_DIR/evolution/backups/"
+    echo "    tests -> $INSTALL_DIR/evolution/tests/"
+    echo ""
   fi
-  echo ""
   echo "  Edit agents/skills/memory in the repo — all tools see changes instantly."
+  echo "  Evolution engine observes sessions and proposes improvements at session end."
   echo ""
   echo "  Quick test:  claude -p 'use the test-ping agent'"
-  echo "  GSD:         /gsd:new-project"
-  echo "  Peers:       claude --dangerously-load-development-channels server:claude-peers"
   echo ""
 }
 
@@ -425,8 +481,7 @@ main() {
   check_prereqs
   setup_repo
   link_all
-  setup_claude_peers
-  setup_gsd
+  install_evolution
   verify
   summary
 }

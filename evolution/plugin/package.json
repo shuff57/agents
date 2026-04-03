@@ -1,0 +1,9 @@
+{
+  "name": "evolution-engine",
+  "version": "0.1.0",
+  "description": "Self-evolution engine for the agents harness. Observes, evolves, and guards agents/skills/teams/chains.",
+  "main": "index.ts",
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  }
+}

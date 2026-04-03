@@ -1,18 +1,18 @@
-# Agents
+# Agent-Evo
 
-Unified agent framework — 47 agents (30 core + 17 GSD), 13 teams, 10 chains, 54 skills, persistent memory. Single source of truth for Claude Code and OpenCode.
+Self-evolving agent framework — 32 agents, 13 teams, 10 chains, 55 skills, persistent memory, and a self-evolution engine. Single source of truth for Claude Code and OpenCode.
 
 ## Install
 
 **One-liner** (clone + symlink + verify):
 ```bash
-git clone https://github.com/shuff57/agents.git ~/Documents/GitHub/agents && bash ~/Documents/GitHub/agents/install.sh
+git clone https://github.com/shuff57/agent-evo.git ~/Documents/GitHub/agent-evo && bash ~/Documents/GitHub/agent-evo/install.sh
 ```
 
 **Or step by step:**
 ```bash
-git clone https://github.com/shuff57/agents.git ~/Documents/GitHub/agents
-cd ~/Documents/GitHub/agents
+git clone https://github.com/shuff57/agent-evo.git ~/Documents/GitHub/agent-evo
+cd ~/Documents/GitHub/agent-evo
 bash install.sh    # detects tools, symlinks, sets up peers + GSD, verifies
 bash test.sh       # runs full test suite
 ```
@@ -36,7 +36,7 @@ AGENTS_DIR=~/my/custom/path bash install.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENTS_DIR` | `~/Documents/GitHub/agents` | Where to install/find the repo |
+| `AGENTS_DIR` | `~/Documents/GitHub/agent-evo` | Where to install/find the repo |
 | `AGENTS_REPO_URL` | (GitHub URL) | Git clone URL |
 
 ## Structure
@@ -143,5 +143,5 @@ rm ~/.claude/agents                              # remove Claude Code symlink
 rm ~/.claude/skills                              # remove Claude Code skills symlink
 rm ~/.claude/memory                              # remove Claude Code memory symlink
 rm ~/.config/opencode/superpowers/agents          # remove OpenCode symlink
-rm -rf ~/Documents/GitHub/agents                  # remove repo
+rm -rf ~/Documents/GitHub/agent-evo                  # remove repo
 ```

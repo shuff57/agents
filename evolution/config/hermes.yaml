@@ -1,0 +1,17 @@
+# Hermes Agent Configuration
+# Evolution features DISABLED — our evolution engine handles this with safety gates.
+# Only memory backend and skill format standard are used from Hermes.
+
+memory:
+  backend: fts5
+  search: true
+
+skills:
+  format: agentskills.io
+
+# DISABLED — do not re-enable. Our evolver handles evolution at session-end
+# with hypothesis-driven changes, regression tests, and rollback safety.
+evolution:
+  skill_auto_improve: false
+  skill_auto_create: false
+  memory_nudges: false
