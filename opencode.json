@@ -1,0 +1,62 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "oh-my-openagent@latest"
+  ],
+  "provider": {
+    "ollama": {
+      "models": {
+        "qwen3.5": {
+          "_launch": true,
+          "name": "qwen3.5"
+        }
+      },
+      "name": "Ollama",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1"
+      }
+    },
+    "lmstudio": {
+      "models": {
+        "qwopus3.5-9b-v3": {
+          "name": "qwopus3.5-9b-v3",
+          "parameters": {
+            "n_ctx": 32768
+          }
+        },
+        "gemma-4-e4b-it": {
+          "name": "gemma-4-e4b-it",
+          "parameters": {
+            "n_ctx": 32768
+          }
+        },
+        "gemma-4-26b-a4b": {
+          "name": "google/gemma-4-26b-a4b",
+          "parameters": {
+            "n_ctx": 32768
+          }
+        },
+        "lfm2-24b-a2b": {
+          "name": "liquid/lfm2-24b-a2b",
+          "parameters": {
+            "n_ctx": 32768
+          }
+        }
+      },
+      "name": "LM Studio",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://localhost:1234/v1"
+      }
+    }
+  },
+  "permission": {
+    "read": {
+      "~/.config/opencode/get-shit-done/*": "allow"
+    },
+    "external_directory": {
+      "~/.config/opencode/get-shit-done/*": "allow"
+    }
+  }
+}

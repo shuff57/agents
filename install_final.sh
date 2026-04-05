@@ -4,15 +4,15 @@
 # and runs a verification pass.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/shuff57/agent-evo/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/shuff57/agents/main/install.sh | bash
 #   # or after cloning:
 #   bash install.sh
 
 set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
-REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agent-evo.git}"
-INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agent-evo}"
+REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agents.git}"
+INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agents}"
 CLAUDE_DIR="$HOME/.claude"
 OPENCODE_DIR="$HOME/.config/opencode/superpowers"
 
@@ -164,73 +164,6 @@ link_all() {
   fi
 }
 
-# ── Evolution Engine ───────────────────────────────────────────────────────
-install_evolution() {
-  info "Installing evolution engine..."
-
-  OPENCODE_PLUGINS="$HOME/.config/opencode/plugins"
-
-  # Symlink evolution plugin to OpenCode plugins directory
-  if command -v opencode &>/dev/null; then
-    backup_and_link "$OPENCODE_PLUGINS/evolution-engine" "$INSTALL_DIR/evolution/plugin" "Evolution engine plugin"
-  fi
-
-  # Install Hermes memory backend
-  if [ -f "$INSTALL_DIR/requirements.txt" ]; then
-    if command -v pip &>/dev/null; then
-      info "Installing Hermes memory backend..."
-      pip install -r "$INSTALL_DIR/requirements.txt" --quiet 2>/dev/null && ok "Hermes installed" || warn "Hermes install failed — memory will use fallback JSONL"
-    elif command -v pip3 &>/dev/null; then
-      info "Installing Hermes memory backend..."
-      pip3 install -r "$INSTALL_DIR/requirements.txt" --quiet 2>/dev/null && ok "Hermes installed" || warn "Hermes install failed — memory will use fallback JSONL"
-    else
-      warn "pip not found — skipping Hermes install (memory will use fallback JSONL)"
-    fi
-  fi
-
-  # Install plugin dependencies
-  if [ -f "$INSTALL_DIR/evolution/plugin/package.json" ]; then
-    info "Installing plugin dependencies..."
-    if command -v bun &>/dev/null; then
-      (cd "$INSTALL_DIR/evolution/plugin" && bun install --silent 2>/dev/null) && ok "Plugin deps installed (bun)" || warn "Plugin deps install failed"
-    elif command -v npm &>/dev/null; then
-      (cd "$INSTALL_DIR/evolution/plugin" && npm install --silent 2>/dev/null) && ok "Plugin deps installed (npm)" || warn "Plugin deps install failed"
-    else
-      warn "Neither bun nor npm found — plugin deps not installed"
-    fi
-  fi
-
-  # Create _workspace directories (gitignored, device-local)
-  mkdir -p "$INSTALL_DIR/_workspace/_metrics"
-  mkdir -p "$INSTALL_DIR/_workspace/_evolution_staged"
-  mkdir -p "$INSTALL_DIR/_workspace/_deprecated_skills"
-  mkdir -p "$INSTALL_DIR/_workspace/_skill_audit"
-  mkdir -p "$INSTALL_DIR/_workspace/_memory"
-  ok "Workspace directories created"
-
-  # Create gen-0 factory snapshot if it doesn't exist
-  if [ ! -d "$INSTALL_DIR/evolution/backups/gen-0" ]; then
-    info "Creating gen-0 factory snapshot..."
-    mkdir -p "$INSTALL_DIR/evolution/backups/gen-0"
-    cp "$INSTALL_DIR/roster/"*.md "$INSTALL_DIR/evolution/backups/gen-0/" 2>/dev/null
-    cp "$INSTALL_DIR/roster/teams.yaml" "$INSTALL_DIR/evolution/backups/gen-0/" 2>/dev/null
-    cp "$INSTALL_DIR/roster/agent-chain.yaml" "$INSTALL_DIR/evolution/backups/gen-0/" 2>/dev/null
-    ok "Gen-0 factory snapshot created ($(ls "$INSTALL_DIR/evolution/backups/gen-0/" | wc -l) files)"
-  else
-    ok "Gen-0 factory snapshot already exists"
-  fi
-
-  # Ensure .gitignore covers _workspace
-  if [ -f "$INSTALL_DIR/.gitignore" ]; then
-    if ! grep -q "_workspace" "$INSTALL_DIR/.gitignore"; then
-      echo "_workspace/" >> "$INSTALL_DIR/.gitignore"
-      echo "evolution/plugin/node_modules/" >> "$INSTALL_DIR/.gitignore"
-      ok "Updated .gitignore"
-    fi
-  fi
-
-  ok "Evolution engine installed"
-}
 # ── Verify ──────────────────────────────────────────────────────────────────
 verify() {
   info "Verifying installation..."
@@ -371,55 +304,6 @@ verify() {
     ok "All team references resolve to agent files"
   fi
 
-  # Verify evolution engine
-  info "Checking evolution engine..."
-  if [ -f "$INSTALL_DIR/roster/evolver.md" ]; then
-    ok "evolver.md found in roster"
-  else
-    fail "evolver.md missing from roster"
-    errors=$((errors + 1))
-  fi
-
-  for efile in index.ts observability.ts safety-guard.ts rollback.ts drift-detector.ts hermes-bridge.ts; do
-    if [ -f "$INSTALL_DIR/evolution/plugin/$efile" ]; then
-      ok "evolution/plugin/$efile found"
-    else
-      fail "evolution/plugin/$efile missing"
-      errors=$((errors + 1))
-    fi
-  done
-
-  for cfile in safety-checksums.json agent-pins.json model-pricing.json hermes.yaml; do
-    if [ -f "$INSTALL_DIR/evolution/config/$cfile" ]; then
-      ok "evolution/config/$cfile found"
-    else
-      fail "evolution/config/$cfile missing"
-      errors=$((errors + 1))
-    fi
-  done
-
-  if [ -d "$INSTALL_DIR/evolution/backups/gen-0" ]; then
-    ok "Gen-0 factory snapshot exists"
-  else
-    fail "Gen-0 factory snapshot missing"
-    errors=$((errors + 1))
-  fi
-
-  if command -v opencode &>/dev/null; then
-    if [ -f "$OPENCODE_PLUGINS/evolution-engine/index.ts" ] 2>/dev/null; then
-      ok "Evolution plugin symlink works"
-    else
-      fail "Evolution plugin symlink broken"
-      errors=$((errors + 1))
-    fi
-  fi
-
-  if grep -q "_workspace" "$INSTALL_DIR/.gitignore" 2>/dev/null; then
-    ok "_workspace is gitignored"
-  else
-    warn "_workspace not in .gitignore"
-  fi
-
   echo ""
   if [ "$errors" -eq 0 ] && [ "$bad_agents" -eq 0 ] && [ "$orphans" -eq 0 ]; then
     echo -e "${GREEN}Installation verified successfully.${NC}"
@@ -455,16 +339,8 @@ summary() {
     echo "    memory -> $INSTALL_DIR/memory/"
   fi
   echo ""
-  if [ -d "$INSTALL_DIR/evolution/plugin" ]; then
-    echo "  Evolution Engine:"
-    echo "    plugin -> ~/.config/opencode/plugins/evolution-engine/"
-    echo "    config -> $INSTALL_DIR/evolution/config/"
-    echo "    backups -> $INSTALL_DIR/evolution/backups/"
-    echo "    tests -> $INSTALL_DIR/evolution/tests/"
-    echo ""
-  fi
+
   echo "  Edit agents/skills/memory in the repo — all tools see changes instantly."
-  echo "  Evolution engine observes sessions and proposes improvements at session end."
   echo ""
 
   echo "  Quick test:  claude -p 'use the test-ping agent'"
@@ -483,7 +359,6 @@ main() {
   check_prereqs
   setup_repo
   link_all
-  install_evolution
   verify
   summary
 }
