@@ -6,9 +6,9 @@
   "provider": {
     "ollama": {
       "models": {
-        "qwen3.5": {
+        "gemma4-31b-cloud": {
           "_launch": true,
-          "name": "qwen3.5"
+          "name": "gemma4:31b-cloud"
         }
       },
       "name": "Ollama",
@@ -19,26 +19,8 @@
     },
     "lmstudio": {
       "models": {
-        "qwopus3.5-9b-v3": {
-          "name": "qwopus3.5-9b-v3",
-          "parameters": {
-            "n_ctx": 32768
-          }
-        },
-        "gemma-4-e4b-it": {
-          "name": "gemma-4-e4b-it",
-          "parameters": {
-            "n_ctx": 32768
-          }
-        },
         "gemma-4-26b-a4b": {
           "name": "google/gemma-4-26b-a4b",
-          "parameters": {
-            "n_ctx": 32768
-          }
-        },
-        "lfm2-24b-a2b": {
-          "name": "liquid/lfm2-24b-a2b",
           "parameters": {
             "n_ctx": 32768
           }
@@ -51,12 +33,5 @@
       }
     }
   },
-  "permission": {
-    "read": {
-      "~/.config/opencode/get-shit-done/*": "allow"
-    },
-    "external_directory": {
-      "~/.config/opencode/get-shit-done/*": "allow"
-    }
-  }
+  "permission": {}
 }

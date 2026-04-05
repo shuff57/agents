@@ -15,6 +15,7 @@ REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agent-evo.git}"
 INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agent-evo}"
 CLAUDE_DIR="$HOME/.claude"
 OPENCODE_DIR="$HOME/.config/opencode/superpowers"
+OPENCODE_PLUGINS="$HOME/.config/opencode/plugins"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -78,8 +79,7 @@ check_prereqs() {
 setup_repo() {
   if [ -d "$INSTALL_DIR/.git" ]; then
     info "Repo exists at $INSTALL_DIR — pulling latest..."
-    cd "$INSTALL_DIR"
-    git pull --rebase origin main 2>/dev/null || git pull --rebase origin master 2>/dev/null || warn "Pull failed — using existing version"
+    (cd "$INSTALL_DIR" && git pull --ff-only origin main 2>/dev/null || git pull --ff-only origin master 2>/dev/null) || warn "Pull failed — using existing version"
     ok "Repo updated"
   elif [ -d "$INSTALL_DIR/roster" ]; then
     info "Repo found at $INSTALL_DIR (not a git clone — using as-is)"
@@ -92,22 +92,72 @@ setup_repo() {
 }
 
 # ── Backup and symlink ─────────────────────────────────────────────────────
+
+# Check if a path is a Windows junction (NTFS reparse point).
+# -L is unreliable for junctions in Git Bash / MSYS2.
+is_junction() {
+  local p="$1"
+  if [ "$PLATFORM" = "windows" ]; then
+    local win_p
+    win_p="$(cygpath -w "$p")"
+    powershell -Command "(Get-Item -LiteralPath '$win_p' -ErrorAction SilentlyContinue).Attributes -match 'ReparsePoint'" 2>/dev/null | grep -qi 'true'
+  else
+    [ -L "$p" ]
+  fi
+}
+
+# Resolve the target of a symlink or junction, normalised to a Unix path.
+resolve_link() {
+  local p="$1"
+  if [ "$PLATFORM" = "windows" ]; then
+    local win_p raw
+    win_p="$(cygpath -w "$p")"
+    raw="$(powershell -Command "(Get-Item -LiteralPath '$win_p').Target" 2>/dev/null)"
+    cygpath -u "$raw" 2>/dev/null || echo "$raw"
+  else
+    readlink "$p" 2>/dev/null || readlink -f "$p" 2>/dev/null
+  fi
+}
+
+# Remove a symlink or junction without following it into the target.
+remove_link() {
+  local p="$1"
+  if [ "$PLATFORM" = "windows" ]; then
+    local win_p
+    win_p="$(cygpath -w "$p")"
+    # Use PowerShell to remove junction pointer without following target.
+    # (Get-Item).Delete() removes the reparse point, not the target contents.
+    powershell -Command "(Get-Item -LiteralPath '$win_p').Delete()" 2>/dev/null
+  else
+    rm "$p"
+  fi
+}
+
 backup_and_link() {
   local target="$1"
   local source="$2"
   local label="$3"
 
-  # Already correctly linked
-  if [ -L "$target" ]; then
+  # Already correctly linked (symlink or junction)
+  if is_junction "$target"; then
     local current
-    current="$(readlink "$target" 2>/dev/null || readlink -f "$target" 2>/dev/null)"
-    if [ "$current" = "$source" ]; then
+    current="$(resolve_link "$target")"
+    # Normalise both to Unix paths for reliable comparison
+    local norm_current norm_source
+    norm_current="$(cygpath -u "$current" 2>/dev/null || echo "$current")"
+    norm_source="$(cygpath -u "$source" 2>/dev/null || echo "$source")"
+    if [ "$norm_current" = "$norm_source" ]; then
       ok "$label already linked"
       return
     fi
-    info "$label symlink exists but points elsewhere — replacing"
-    rm "$target"
+    info "$label linked elsewhere ($norm_current) — replacing"
+    remove_link "$target"
   elif [ -d "$target" ]; then
+    # Regular directory — back it up safely
+    if [ -d "${target}.bak" ]; then
+      warn "${target}.bak already exists — removing old backup"
+      rm -rf "${target}.bak"
+    fi
     info "Backing up existing $label to ${target}.bak"
     mv "$target" "${target}.bak"
   fi
@@ -115,13 +165,48 @@ backup_and_link() {
   mkdir -p "$(dirname "$target")"
 
   if [ "$PLATFORM" = "windows" ]; then
-    # ln -sfn doesn't create real symlinks on Windows; use junctions via PowerShell
     local win_target win_source
     win_target="$(cygpath -w "$target")"
     win_source="$(cygpath -w "$source")"
     powershell -Command "New-Item -ItemType Junction -Path '$win_target' -Target '$win_source'" > /dev/null
   else
     ln -sfn "$source" "$target"
+  fi
+  ok "$label linked -> $source"
+}
+
+backup_and_link_file() {
+  local target="$1"
+  local source="$2"
+  local label="$3"
+
+  # Already correctly linked
+  if [ -L "$target" ] || is_junction "$target"; then
+    local current
+    current="$(resolve_link "$target")"
+    local norm_current norm_source
+    norm_current="$(cygpath -u "$current" 2>/dev/null || echo "$current")"
+    norm_source="$(cygpath -u "$source" 2>/dev/null || echo "$source")"
+    if [ "$norm_current" = "$norm_source" ]; then
+      ok "$label already linked"
+      return
+    fi
+    info "$label linked elsewhere ($norm_current) — replacing"
+    rm -f "$target"
+  elif [ -f "$target" ]; then
+    info "Backing up existing $label to ${target}.bak"
+    mv "$target" "${target}.bak"
+  fi
+
+  mkdir -p "$(dirname "$target")"
+
+  if [ "$PLATFORM" = "windows" ]; then
+    local win_target win_source
+    win_target="$(cygpath -w "$target")"
+    win_source="$(cygpath -w "$source")"
+    cmd //c "mklink \"$win_target\" \"$win_source\"" > /dev/null 2>&1 || ln -sf "$source" "$target"
+  else
+    ln -sf "$source" "$target"
   fi
   ok "$label linked -> $source"
 }
@@ -134,7 +219,13 @@ link_all() {
     backup_and_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills"
     backup_and_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory"
 
+    # Symlink settings.json
+    if [ -f "$INSTALL_DIR/settings.json" ]; then
+      backup_and_link_file "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings"
+    fi
+
     # Link custom commands (ultrawork, deep-interview, etc.)
+    mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/hooks"
     if [ -d "$INSTALL_DIR/commands" ]; then
       for cmd in "$INSTALL_DIR/commands/"*.md; do
         [ -f "$cmd" ] || continue
@@ -158,17 +249,24 @@ link_all() {
   fi
 
   if command -v opencode &>/dev/null; then
+    local OPENCODE_CFG="$HOME/.config/opencode"
     backup_and_link "$OPENCODE_DIR/agents" "$INSTALL_DIR/roster" "OpenCode agents"
     backup_and_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills"
     backup_and_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory"
+
+    # Symlink opencode config files
+    if [ -f "$INSTALL_DIR/opencode.json" ]; then
+      backup_and_link_file "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config"
+    fi
+    if [ -f "$INSTALL_DIR/oh-my-openagent.json" ]; then
+      backup_and_link_file "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config"
+    fi
   fi
 }
 
 # ── Evolution Engine ───────────────────────────────────────────────────────
 install_evolution() {
   info "Installing evolution engine..."
-
-  OPENCODE_PLUGINS="$HOME/.config/opencode/plugins"
 
   # Symlink evolution plugin to OpenCode plugins directory
   if command -v opencode &>/dev/null; then
@@ -246,7 +344,7 @@ verify() {
   local agent_count
   agent_count=$(ls "$INSTALL_DIR/roster/"*.md 2>/dev/null | grep -cv README || echo 0)
   if [ "$agent_count" -lt 20 ]; then
-    fail "Expected 29+ agents, found $agent_count"
+    fail "Expected 20+ agents, found $agent_count"
     errors=$((errors + 1))
   else
     ok "$agent_count agents in roster"
@@ -289,47 +387,43 @@ verify() {
     errors=$((errors + 1))
   fi
 
-  # Verify symlinks resolve
+  # Verify symlinks resolve AND point to the correct targets
+  verify_link() {
+    local link_path="$1" expected_source="$2" label="$3" probe="$4"
+    if [ ! -e "$probe" ]; then
+      fail "$label link broken (cannot reach $probe)"
+      errors=$((errors + 1))
+      return
+    fi
+    if is_junction "$link_path"; then
+      local actual
+      actual="$(resolve_link "$link_path")"
+      local norm_actual norm_expected
+      norm_actual="$(cygpath -u "$actual" 2>/dev/null || echo "$actual")"
+      norm_expected="$(cygpath -u "$expected_source" 2>/dev/null || echo "$expected_source")"
+      if [ "$norm_actual" != "$norm_expected" ]; then
+        fail "$label points to $norm_actual (expected $norm_expected)"
+        errors=$((errors + 1))
+        return
+      fi
+    fi
+    ok "$label OK"
+  }
+
   if command -v claude &>/dev/null; then
-    if [ -f "$CLAUDE_DIR/agents/test-ping.md" ]; then
-      ok "Claude Code can see agents"
-    else
-      fail "Claude Code agents link broken"
-      errors=$((errors + 1))
-    fi
-    if [ -d "$CLAUDE_DIR/skills/playwriter" ]; then
-      ok "Claude Code can see skills"
-    else
-      fail "Claude Code skills link broken"
-      errors=$((errors + 1))
-    fi
-    if [ -d "$CLAUDE_DIR/memory/hivemind" ]; then
-      ok "Claude Code can see memory"
-    else
-      fail "Claude Code memory link broken"
-      errors=$((errors + 1))
-    fi
+    verify_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents" "$CLAUDE_DIR/agents/test-ping.md"
+    verify_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills" "$CLAUDE_DIR/skills/playwriter"
+    verify_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory" "$CLAUDE_DIR/memory/hivemind"
+    verify_link "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings" "$CLAUDE_DIR/settings.json"
   fi
 
   if command -v opencode &>/dev/null; then
-    if [ -f "$OPENCODE_DIR/agents/test-ping.md" ]; then
-      ok "OpenCode can see agents"
-    else
-      fail "OpenCode agents link broken"
-      errors=$((errors + 1))
-    fi
-    if [ -d "$OPENCODE_DIR/skills/playwriter" ]; then
-      ok "OpenCode can see skills"
-    else
-      fail "OpenCode skills link broken"
-      errors=$((errors + 1))
-    fi
-    if [ -d "$OPENCODE_DIR/memory/hivemind" ]; then
-      ok "OpenCode can see memory"
-    else
-      fail "OpenCode memory link broken"
-      errors=$((errors + 1))
-    fi
+    local OPENCODE_CFG="$HOME/.config/opencode"
+    verify_link "$OPENCODE_DIR/agents" "$INSTALL_DIR/roster" "OpenCode agents" "$OPENCODE_DIR/agents/test-ping.md"
+    verify_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills" "$OPENCODE_DIR/skills/playwriter"
+    verify_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory" "$OPENCODE_DIR/memory/hivemind"
+    verify_link "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config" "$OPENCODE_CFG/opencode.json"
+    verify_link "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config" "$OPENCODE_CFG/oh-my-openagent.json"
   fi
 
   # Validate agent frontmatter
@@ -447,12 +541,15 @@ summary() {
     echo "    agents -> $INSTALL_DIR/roster/"
     echo "    skills -> $INSTALL_DIR/skills/"
     echo "    memory -> $INSTALL_DIR/memory/"
+    echo "    settings.json -> $INSTALL_DIR/settings.json"
   fi
   if command -v opencode &>/dev/null; then
     echo "  OpenCode:"
     echo "    agents -> $INSTALL_DIR/roster/"
     echo "    skills -> $INSTALL_DIR/skills/"
     echo "    memory -> $INSTALL_DIR/memory/"
+    echo "    opencode.json -> $INSTALL_DIR/opencode.json"
+    echo "    oh-my-openagent.json -> $INSTALL_DIR/oh-my-openagent.json"
   fi
   echo ""
   if [ -d "$INSTALL_DIR/evolution/plugin" ]; then
