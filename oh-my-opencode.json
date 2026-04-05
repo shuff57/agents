@@ -33,9 +33,6 @@
     "sisyphus-junior": {
       "model": "opencode/kimi-k2.5"
     },
-    "scout": {
-      "model": "opencode/kimi-k2.5"
-    },
     "planner": {
       "model": "github-copilot/claude-sonnet-4.6"
     },

@@ -258,8 +258,8 @@ link_all() {
     if [ -f "$INSTALL_DIR/opencode.json" ]; then
       backup_and_link_file "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config"
     fi
-    if [ -f "$INSTALL_DIR/oh-my-openagent.json" ]; then
-      backup_and_link_file "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config"
+    if [ -f "$INSTALL_DIR/oh-my-opencode.json" ]; then
+      backup_and_link_file "$OPENCODE_CFG/oh-my-opencode.json" "$INSTALL_DIR/oh-my-opencode.json" "oh-my-openagent config"
     fi
   fi
 }
@@ -423,7 +423,7 @@ verify() {
     verify_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills" "$OPENCODE_DIR/skills/playwriter"
     verify_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory" "$OPENCODE_DIR/memory/hivemind"
     verify_link "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config" "$OPENCODE_CFG/opencode.json"
-    verify_link "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config" "$OPENCODE_CFG/oh-my-openagent.json"
+    verify_link "$OPENCODE_CFG/oh-my-opencode.json" "$INSTALL_DIR/oh-my-opencode.json" "oh-my-openagent config" "$OPENCODE_CFG/oh-my-opencode.json"
   fi
 
   # Validate agent frontmatter
@@ -549,7 +549,7 @@ summary() {
     echo "    skills -> $INSTALL_DIR/skills/"
     echo "    memory -> $INSTALL_DIR/memory/"
     echo "    opencode.json -> $INSTALL_DIR/opencode.json"
-    echo "    oh-my-openagent.json -> $INSTALL_DIR/oh-my-openagent.json"
+    echo "    oh-my-opencode.json -> $INSTALL_DIR/oh-my-opencode.json"
   fi
   echo ""
   if [ -d "$INSTALL_DIR/evolution/plugin" ]; then
