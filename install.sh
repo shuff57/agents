@@ -273,17 +273,25 @@ install_evolution() {
     backup_and_link "$OPENCODE_PLUGINS/evolution-engine" "$INSTALL_DIR/evolution/plugin" "Evolution engine plugin"
   fi
 
-  # Install Hermes memory backend
-  if [ -f "$INSTALL_DIR/requirements.txt" ]; then
-    if command -v pip &>/dev/null; then
-      info "Installing Hermes memory backend..."
-      pip install -r "$INSTALL_DIR/requirements.txt" --quiet 2>/dev/null && ok "Hermes installed" || warn "Hermes install failed — memory will use fallback JSONL"
-    elif command -v pip3 &>/dev/null; then
-      info "Installing Hermes memory backend..."
-      pip3 install -r "$INSTALL_DIR/requirements.txt" --quiet 2>/dev/null && ok "Hermes installed" || warn "Hermes install failed — memory will use fallback JSONL"
+  # Install Hermes memory backend (source install only — not available on PyPI)
+  if command -v uv &>/dev/null; then
+    info "Installing Hermes memory backend (NousResearch/hermes-agent)..."
+    if git clone --recurse-submodules https://github.com/NousResearch/hermes-agent.git ~/hermes-agent 2>/dev/null; then
+      (
+        cd ~/hermes-agent || exit 1
+        uv venv venv --python 3.11 --quiet 2>/dev/null || { warn "Hermes venv creation failed (Python 3.11 required) — memory will use fallback JSONL"; exit 1; }
+        VIRTUAL_ENV="$(pwd)/venv" uv pip install -e "." --quiet 2>/dev/null || { warn "Hermes pip install failed — memory will use fallback JSONL"; exit 1; }
+        mkdir -p ~/.local/bin
+        ln -sf ~/hermes-agent/venv/bin/hermes ~/.local/bin/hermes
+        mkdir -p ~/.hermes/{memories,skills,sessions,logs}
+        ok "Hermes memory backend installed (~/.local/bin/hermes)"
+      ) || true
     else
-      warn "pip not found — skipping Hermes install (memory will use fallback JSONL)"
+      warn "Hermes clone failed — memory will use fallback JSONL"
     fi
+  else
+    warn "uv not found — skipping Hermes install (memory will use fallback JSONL)"
+    warn "To install manually: https://github.com/NousResearch/hermes-agent"
   fi
 
   # Install plugin dependencies
