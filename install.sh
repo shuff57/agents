@@ -557,7 +557,6 @@ summary() {
     echo "    skills -> $INSTALL_DIR/skills/"
     echo "    memory -> $INSTALL_DIR/memory/"
     echo "    opencode.json -> $INSTALL_DIR/opencode.json"
-    echo "    oh-my-opencode.json -> $INSTALL_DIR/oh-my-opencode.json"
   fi
   echo ""
   if [ -d "$INSTALL_DIR/evolution/plugin" ]; then
