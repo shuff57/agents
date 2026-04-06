@@ -323,11 +323,22 @@ install_evolution() {
   "keyword_search": false
 }
 JSON
-        # Write ~/.hermes/config.yaml — activates mem0 as the active provider
+        # Write ~/.hermes/config.yaml — activates mem0 + Ollama as inference provider
         cat > ~/.hermes/config.yaml <<YAML
 memory:
   provider: mem0
+
+model:
+  default: qwen3-coder-next:cloud
+  base_url: http://localhost:11434/v1
+  api_key: ollama
 YAML
+        # Write ~/.hermes/.env — provides OPENAI_API_KEY/BASE_URL so Hermes
+        # auto-connects to Ollama without needing shell env vars at runtime
+        if [ ! -f ~/.hermes/.env ] || ! grep -q "OPENAI_BASE_URL" ~/.hermes/.env; then
+          printf 'OPENAI_API_KEY=ollama\nOPENAI_BASE_URL=http://localhost:11434/v1\n' >> ~/.hermes/.env
+          chmod 600 ~/.hermes/.env
+        fi
         # Persist key to shell so re-runs can skip the prompt
         if [ -f ~/.bashrc ] && ! grep -q "MEM0_API_KEY" ~/.bashrc; then
           echo "export MEM0_API_KEY=\"$_mem0_key\"" >> ~/.bashrc
