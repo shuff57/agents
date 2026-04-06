@@ -289,6 +289,56 @@ install_evolution() {
     else
       warn "Hermes clone failed — memory will use fallback JSONL"
     fi
+
+    # ── Mem0 cross-device memory sync ────────────────────────────────────────
+    # mem0ai enables Hermes memories to sync across all devices via Mem0 cloud.
+    # Same API key works on every machine — memories are tied to your user_id.
+    # Get a free key at: https://app.mem0.ai → Settings → API Keys
+    if [ -d ~/hermes-agent/venv ]; then
+      info "Installing mem0ai for cross-device memory sync..."
+      VIRTUAL_ENV=~/hermes-agent/venv uv pip install mem0ai --quiet 2>/dev/null \
+        && ok "mem0ai installed" \
+        || warn "mem0ai install failed — Hermes will use local-only memory"
+
+      # Resolve API key: env var takes priority, then prompt interactively
+      _mem0_key="${MEM0_API_KEY:-}"
+      if [ -z "$_mem0_key" ]; then
+        echo ""
+        echo -e "${BLUE}[mem0]${NC}  Mem0 syncs Hermes memories across all your devices."
+        echo -e "${BLUE}[mem0]${NC}  Get a free key at: https://app.mem0.ai → Settings → API Keys"
+        echo -e "${BLUE}[mem0]${NC}  Your existing key works here — no new key needed per device."
+        printf "${BLUE}[mem0]${NC}  Enter Mem0 API key (or press Enter to skip): "
+        read -r _mem0_key 2>/dev/null || true
+      fi
+
+      if [ -n "$_mem0_key" ]; then
+        # Write ~/.hermes/mem0.json — credentials + identity
+        mkdir -p ~/.hermes
+        cat > ~/.hermes/mem0.json <<JSON
+{
+  "api_key": "$_mem0_key",
+  "user_id": "${USER:-hermes-user}",
+  "agent_id": "hermes",
+  "rerank": true,
+  "keyword_search": false
+}
+JSON
+        # Write ~/.hermes/config.yaml — activates mem0 as the active provider
+        cat > ~/.hermes/config.yaml <<YAML
+memory:
+  provider: mem0
+YAML
+        # Persist key to shell so re-runs can skip the prompt
+        if [ -f ~/.bashrc ] && ! grep -q "MEM0_API_KEY" ~/.bashrc; then
+          echo "export MEM0_API_KEY=\"$_mem0_key\"" >> ~/.bashrc
+        fi
+        ok "Mem0 configured — memories will sync across devices (user: ${USER:-hermes-user})"
+      else
+        warn "Mem0 API key not provided — Hermes will use local-only memory"
+        warn "To add later: set MEM0_API_KEY in ~/.bashrc and re-run install.sh"
+      fi
+    fi
+    # ── End Mem0 setup ────────────────────────────────────────────────────────
   else
     warn "uv not found — skipping Hermes install (memory will use fallback JSONL)"
     warn "To install manually: https://github.com/NousResearch/hermes-agent"
