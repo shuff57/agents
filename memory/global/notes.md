@@ -56,3 +56,5 @@ Cross-project learnings, preferences, and patterns that apply across all work.
 - **PowerShell env vars**: Set with `$env:VAR=value`, not `export VAR=value`
 
 <!-- hook test 12:01:01 -->
+
+<!-- hook test 2 12:01:36 -->
