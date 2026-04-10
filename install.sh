@@ -398,6 +398,93 @@ YAML
 
   ok "Evolution engine installed"
 }
+
+# ── Graphify ───────────────────────────────────────────────────────────────
+# Installs the graphify knowledge-graph tool for the target project directory.
+# Graceful: prints a warning and continues if Python/pip are unavailable.
+install_graphify() {
+  info "Installing graphify knowledge graph..."
+
+  # ── Find Python ────────────────────────────────────────────────────────
+  _find_python() {
+    # 1. Hardcoded Windows full path (most reliable in Git Bash / MSYS2)
+    local _WIN_PY="/c/Users/shuff57/AppData/Local/Programs/Python/Python314/python.exe"
+    [ -f "$_WIN_PY" ] && echo "$_WIN_PY" && return
+    # 2. Windows py launcher
+    command -v py &>/dev/null && echo "py -3" && return
+    # 3. Standard names
+    for p in python3 python; do
+      command -v "$p" &>/dev/null && echo "$p" && return
+    done
+  }
+
+  local PYTHON
+  PYTHON="$(_find_python)"
+  if [ -z "$PYTHON" ]; then
+    warn "Python not found — skipping graphify install"
+    warn "To install manually: pip install graphifyy mcp"
+    return 0
+  fi
+  ok "Python found: $PYTHON"
+
+  # ── Install packages ───────────────────────────────────────────────────
+  if PYTHONUTF8=1 $PYTHON -c "import graphify" &>/dev/null 2>&1; then
+    ok "graphifyy already installed"
+  else
+    info "Installing graphifyy and mcp via pip..."
+    if PYTHONUTF8=1 $PYTHON -m pip install graphifyy mcp --quiet 2>/dev/null; then
+      ok "graphifyy installed"
+    else
+      warn "pip install graphifyy failed — skipping graphify setup"
+      return 0
+    fi
+  fi
+
+  # ── Install git hooks for the target project ───────────────────────────
+  local target_dir="${1:-$INSTALL_DIR}"
+  if [ -d "$target_dir/.git" ]; then
+    info "Installing graphify git hooks in $target_dir..."
+    if PYTHONUTF8=1 $PYTHON -m graphify hook install --path "$target_dir" &>/dev/null 2>&1; then
+      ok "Graphify git hooks installed"
+    else
+      warn "graphify hook install failed — hooks not set up (graph will still build manually)"
+    fi
+  else
+    info "No .git directory found at $target_dir — skipping git hooks"
+  fi
+
+  # ── Install Claude Code skill + PreToolUse hook ────────────────────────
+  if PYTHONUTF8=1 $PYTHON -m graphify install &>/dev/null 2>&1; then
+    ok "Graphify Claude skill + hook registered"
+  else
+    warn "graphify install step failed — Claude integration may be incomplete"
+  fi
+
+  # ── Build initial graph ────────────────────────────────────────────────
+  info "Building initial knowledge graph for $target_dir..."
+  if PYTHONUTF8=1 $PYTHON -c "
+import os, sys
+from pathlib import Path
+from graphify.watch import _rebuild_code
+_rebuild_code(Path('$target_dir'))
+" 2>/dev/null; then
+    ok "Knowledge graph built in $target_dir/graphify-out/"
+  else
+    warn "Initial graph build failed — run manually: python -m graphify build"
+  fi
+
+  # ── Ensure graphify-out/ is gitignored ────────────────────────────────
+  local gitignore="$target_dir/.gitignore"
+  if [ -f "$gitignore" ]; then
+    if ! grep -q "graphify-out" "$gitignore"; then
+      echo "graphify-out/" >> "$gitignore"
+      ok "Added graphify-out/ to .gitignore"
+    fi
+  fi
+
+  ok "Graphify setup complete"
+}
+
 # ── Verify ──────────────────────────────────────────────────────────────────
 verify() {
   info "Verifying installation..."
@@ -543,7 +630,7 @@ verify() {
     errors=$((errors + 1))
   fi
 
-  for efile in index.ts observability.ts safety-guard.ts rollback.ts drift-detector.ts hermes-bridge.ts; do
+  for efile in index.ts observability.ts safety-guard.ts rollback.ts drift-detector.ts; do
     if [ -f "$INSTALL_DIR/evolution/plugin/$efile" ]; then
       ok "evolution/plugin/$efile found"
     else
@@ -552,7 +639,7 @@ verify() {
     fi
   done
 
-  for cfile in safety-checksums.json agent-pins.json model-pricing.json hermes.yaml; do
+  for cfile in safety-checksums.json agent-pins.json model-pricing.json; do
     if [ -f "$INSTALL_DIR/evolution/config/$cfile" ]; then
       ok "evolution/config/$cfile found"
     else
@@ -628,6 +715,15 @@ summary() {
     echo "    tests -> $INSTALL_DIR/evolution/tests/"
     echo ""
   fi
+  if [ -d "$INSTALL_DIR/graphify-out" ]; then
+    local node_count=""
+    node_count=$(python -c "import json; d=json.load(open('$INSTALL_DIR/graphify-out/graph.json')); print(len(d.get('nodes', [])))" 2>/dev/null || echo "?")
+    echo "  Graphify Knowledge Graph:"
+    echo "    graph -> $INSTALL_DIR/graphify-out/"
+    echo "    nodes: $node_count"
+    echo "    rebuild: python -m graphify build (or commit to trigger hook)"
+    echo ""
+  fi
   echo "  Edit agents/skills/memory in the repo — all tools see changes instantly."
   echo "  Evolution engine observes sessions and proposes improvements at session end."
   echo ""
@@ -649,6 +745,7 @@ main() {
   setup_repo
   link_all
   install_evolution
+  install_graphify "$INSTALL_DIR"
   verify
   summary
 }

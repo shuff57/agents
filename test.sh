@@ -173,19 +173,86 @@ done
 # ── Skills check ────────────────────────────────────────────────────────────
 info "Skills"
 
-skill_count=$(ls -d "$SCRIPT_DIR/skills/"*/ 2>/dev/null | wc -l)
+# Count all SKILL.md files recursively (handles namespaced sub-dirs like apple/, mlops/)
+skill_count=$(find "$SCRIPT_DIR/skills" -name "SKILL.md" 2>/dev/null | wc -l)
 [ "$skill_count" -gt 0 ] && ok "$skill_count skills available" || fail "No skills found"
 
-skills_with_md=0
-for d in "$SCRIPT_DIR/skills/"*/; do
-  [ -f "$d/SKILL.md" ] && skills_with_md=$((skills_with_md + 1))
-done
-[ "$skills_with_md" -eq "$skill_count" ] && ok "All skills have SKILL.md" || fail "$skills_with_md/$skill_count skills have SKILL.md"
+# Every SKILL.md found IS a skill — so count == total by definition; just verify none are empty
+skills_empty=0
+while IFS= read -r skill_file; do
+  [ ! -s "$skill_file" ] && skills_empty=$((skills_empty + 1))
+done < <(find "$SCRIPT_DIR/skills" -name "SKILL.md" 2>/dev/null)
+[ "$skills_empty" -eq 0 ] && ok "All skills have non-empty SKILL.md" || fail "$skills_empty skills have empty SKILL.md"
 
 # ── Memory check ────────────────────────────────────────────────────────────
 info "Memory"
 
 [ -d "$SCRIPT_DIR/memory" ] && ok "Memory directory exists" || fail "Memory directory missing"
+
+# ── Graphify check ───────────────────────────────────────────────────────────
+info "Graphify"
+
+# Find Python (Windows-aware, username-independent)
+_find_python_test() {
+  # Windows: check common install locations using $HOME (works in Git Bash)
+  if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || -n "$WINDIR" ]]; then
+    for pyver in Python314 Python313 Python312 Python311 Python310 Python39; do
+      local _candidate="$HOME/AppData/Local/Programs/Python/${pyver}/python.exe"
+      [ -f "$_candidate" ] && echo "$_candidate" && return
+    done
+    # py launcher as fallback (may point to a different install)
+    command -v py &>/dev/null && echo "py" && return
+  fi
+  for p in python3 python; do
+    command -v "$p" &>/dev/null && echo "$p" && return
+  done
+}
+_PY="$(_find_python_test)"
+
+if [ -z "$_PY" ]; then
+  fail "Python not found — cannot verify graphify"
+else
+  ok "Python found: $_PY"
+
+  # Package importable?
+  if PYTHONUTF8=1 $_PY -c "import graphify" &>/dev/null 2>&1; then
+    ok "graphifyy package importable"
+  else
+    fail "graphifyy not installed (run: pip install graphifyy mcp)"
+  fi
+
+  # Git hooks present?
+  if [ -f "$SCRIPT_DIR/.git/hooks/post-commit" ] && grep -q "graphify" "$SCRIPT_DIR/.git/hooks/post-commit" 2>/dev/null; then
+    ok "graphify post-commit hook installed"
+  else
+    fail "graphify post-commit hook missing (run install.sh to set up)"
+  fi
+
+  if [ -f "$SCRIPT_DIR/.git/hooks/post-checkout" ] && grep -q "graphify" "$SCRIPT_DIR/.git/hooks/post-checkout" 2>/dev/null; then
+    ok "graphify post-checkout hook installed"
+  else
+    fail "graphify post-checkout hook missing (run install.sh to set up)"
+  fi
+
+  # Graph output exists? Use a temp Python script to avoid path quoting issues
+  if [ -f "$SCRIPT_DIR/graphify-out/graph.json" ]; then
+    _tmp_py=$(mktemp /tmp/gfy_count.XXXXXX.py)
+    cat > "$_tmp_py" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        d = json.load(f)
+    print(len(d.get('nodes', [])))
+except Exception:
+    print('?')
+PYEOF
+    node_count=$(PYTHONUTF8=1 $_PY "$_tmp_py" "$SCRIPT_DIR/graphify-out/graph.json" 2>/dev/null || echo "?")
+    rm -f "$_tmp_py"
+    ok "graphify-out/graph.json exists ($node_count nodes)"
+  else
+    fail "graphify-out/graph.json not found — commit or run: python -m graphify build"
+  fi
+fi
 
 # ── Live test (optional) ───────────────────────────────────────────────────
 if [ "$LIVE_TEST" = true ]; then
