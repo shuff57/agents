@@ -17,3 +17,5 @@ bookSHelf project structure: Uses global skills symlinks for cross-device sync v
 Project-level .claude/, .config/, and .opencode.json removed as redundant - global symlinks handle skills. Only .hermes/ kept in project for config.yaml and hooks.
 
 Skills source of truth: /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/skills/
+§
+Default Hermes model: github-copilot/claude-sonnet-4.6 (changed from glm-5.1:cloud). Config at ~/.hermes/config.yaml still has ollama base_url/api_key as fallback.
