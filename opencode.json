@@ -3,6 +3,13 @@
   "plugin": [
     "oh-my-openagent@latest"
   ],
-  
+
+  "command": {
+    "session-end": {
+      "description": "Capture session learnings and write a reflection to .agents/memory/pending/",
+      "template": "Use the session-reflector skill: draft a ≤30-line reflection covering what was done, patterns noticed, corrections received, and suggestions. Then ask me to confirm before saving."
+    }
+  },
+
   "permission": {}
 }

@@ -1,21 +1,16 @@
 ---
 name: session-reflector
-description: Use when ending a work session or starting a new one to persist learnings in pending/ and keep LightRAG memory indexed and queryable.
+description: Use when ending a work session or starting a new one to persist learnings in pending/ and keep agent memory current.
 ---
 
 # Session Reflector
 
-> This skill standardizes end-of-session reflection capture and next-session memory retrieval for agent continuity. It always confirms with the user before writing, writes durable markdown first, then opportunistically indexes into LightRAG. If Ollama or LightRAG is unavailable, the workflow still succeeds by preserving pending reflections for later indexing.
-
-## Prerequisites
-- Write access to `.agents/memory/pending/`
-- Python available for index and query scripts
-- Optional for indexing/query: Ollama running locally with LightRAG installed
+> Captures end-of-session learnings as flat markdown files in `.agents/memory/pending/`. No external dependencies — works with any setup. Indexing into a knowledge graph is optional and deferred.
 
 ## When to Use
 - Session is ending and key learnings should be preserved
-- New session is beginning and prior learnings should be recalled
-- `pending/` contains unindexed reflection files from a prior session
+- New session is beginning and prior context should be recalled
+- `pending/` contains unread reflection files from a prior session
 
 ## When NOT to Use
 - One-off transient notes not meant to become durable memory
@@ -25,102 +20,84 @@ description: Use when ending a work session or starting a new one to persist lea
 
 > ⚠️ **Must NOT:**
 > - Write to `.agents/memory/pending/` without explicit user confirmation [y/n]
-> - Block session end on LightRAG/Ollama availability
-> - Skip writing a reflection because indexing failed
-> - Delete pending reflections before successful indexing
-> - Move files out of `pending/` unless indexing confirmed success
-
-## Quick Start
-1. Draft a reflection summary from the session.
-2. Ask: "Save learnings to `.agents/memory/pending/`? [y/n/edit]"
-3. On yes: write `{YYYY-MM-DD}-{slug}.md` to pending/.
+> - Block session end waiting for any external service
+> - Delete or move files from `pending/` unless explicitly archiving
 
 ## Workflow
 
-### Phase 0: Confirm Before Writing (Required)
-- **INPUT:** Session outcomes, corrections, repeat patterns
-- **ACTION:** Draft a reflection summary (≤50 lines), then ask the user:
-  > "Want me to save these learnings to `.agents/memory/pending/`? [y/n/edit]"
-- **OUTPUT:** User decision — only proceed to Phase 1 if confirmed. On "edit", show the draft for revision before writing.
+### Phase 0: Draft + Confirm (Required)
 
-### Phase 1: Session End Reflection (Immediate)
-- **INPUT:** Confirmed reflection content
-- **ACTION:**
-  1. Write `{YYYY-MM-DD}-{slug}.md` to `.agents/memory/pending/`
-  2. Immediately index: `~/.agents/memory/.venv/bin/python3 ~/.agents/memory/scripts/index_reflection.py <file>`
-  3. Script auto-archives to `pending/indexed/` on success
-  4. On failure: leave in `pending/`, note for next session
-- **OUTPUT:** Reflection written and queryable immediately.
+1. Draft a reflection summary (≤30 lines) covering:
+   - What was done (high-level completed work)
+   - Patterns noticed (repeatable workflows or failure patterns)
+   - Corrections received (what changed due to feedback)
+   - Suggestions for skills or routing improvements
 
-Required reflection content:
-- What was done (high-level completed work)
-- Patterns noticed (repeatable workflow or failure patterns)
-- Corrections received (what changed due to feedback)
-- Skill creation/improvement suggestions
+2. Ask the user (using the `question` tool in OpenCode, or bracketed text in other tools):
 
-### Phase 2: Next Session Start — Recall + Index Any Remaining Pending
-- **INPUT:** Current task summary + any `.md` files still in `.agents/memory/pending/`
-- **ACTION A (Recall First):**
-  `~/.agents/memory/.venv/bin/python3 ~/.agents/memory/scripts/query_memory.py "<current task summary>"`
-- **ACTION B (Index stragglers):** For each `.md` still in `pending/` (not yet archived):
-  1. Run `~/.agents/memory/.venv/bin/python3 ~/.agents/memory/scripts/index_reflection.py <file>`
-  2. Script auto-archives on success; leave on failure
-- **OUTPUT:** Relevant memory recalled; leftover pending files indexed.
+   > "Save these learnings to `.agents/memory/pending/`? [y/n/edit]"
 
-## Question Hook Conventions (Per Tool)
+3. On **y**: proceed to Phase 1.  
+   On **edit**: show draft for revision, then proceed after confirmation.  
+   On **n**: end cleanly with no changes.
 
-Questions to the user MUST use the tool's native mechanism — never free-form text guessing.
+### Phase 1: Write Reflection File
 
-### OpenCode (native — preferred)
-Use the **`question` tool** directly. OpenCode shows a real UI dialog.
-The `/session-end` command in `opencode.json` triggers this workflow.
-`permission.question` is set to `"ask"` in `opencode.json` — dialog always appears.
+File path: `.agents/memory/pending/{YYYY-MM-DD}-{slug}.md`
 
-### Other tools (fallback)
-Use bracketed text format:
-```
-[QUESTION] <question text>
-Options: y / n / edit
+**Naming**: slug = 2–4 kebab-case words summarizing the session (e.g. `auth-refactor-middleware`, `pdf-skill-debug`).
+
+**Template:**
+```markdown
+# {YYYY-MM-DD} — {Session Title}
+
+## What Was Done
+- ...
+
+## Patterns Noticed
+- ...
+
+## Corrections Received
+- ...
+
+## Suggestions
+- ...
 ```
 
-| Tool | Mechanism | Trigger |
-|------|-----------|---------|
-| OpenCode | `question` tool (native UI) | `/session-end` command |
-| Other | `[QUESTION]` text format | Manual invocation |
+Write the file. Confirm written path to user. Done — no further steps required.
 
-## Graceful Degradation
+### Phase 2: Next Session Start — Recall Prior Learnings
 
-If Ollama or LightRAG is down/unavailable:
-- Still write session reflection markdown to `pending/`
-- Do not fail session shutdown
-- Defer indexing to a later session
-- Keep script calls non-blocking
+At the start of a new session, check for `.md` files in `.agents/memory/pending/`:
 
-## Error Handling
+```
+ls .agents/memory/pending/
+```
 
-| Problem | Action |
-|---------|--------|
-| Ollama not running | Keep reflections in `pending/`; retry indexing next session |
-| LightRAG dependency missing | Preserve flat markdown; run setup later |
-| `index_reflection.py` fails | Leave file in `pending/`, log reason, continue |
-| `query_memory.py` — no graph data | Proceed with work; index pending files when possible |
-| User says no to saving | End cleanly with no changes |
+If files exist, read them and surface relevant context before starting work.
 
-## Common Mistakes
-
-| Mistake | Fix |
-|---------|-----|
-| Auto-writing without confirmation | Always ask [y/n] before writing to pending/ |
-| Writing reflections outside `pending/` | Save to the required pending path and naming pattern |
-| Making indexing mandatory at session end | Treat indexing as deferred and non-blocking |
-| Moving files before confirmed index | Move to `indexed/` only after index success |
+If the project uses a knowledge graph (e.g. LightRAG), indexing can be done separately — this skill does not require or assume it.
 
 ## State Management
-- **Pending queue:** `.agents/memory/pending/{YYYY-MM-DD}-{slug}.md`
-- **Indexed archive:** `.agents/memory/pending/indexed/`
-- **Knowledge graph:** `.agents/memory/lightrag_workdir/` (gitignored)
 
-## References
-- Index script: `.agents/memory/scripts/index_reflection.py`
-- Query script: `.agents/memory/scripts/query_memory.py`
-- LightRAG setup: `.agents/memory/scripts/setup.sh`
+| Location | Purpose |
+|---|---|
+| `.agents/memory/pending/{date}-{slug}.md` | Unread reflections — source of truth |
+| `.agents/memory/pending/indexed/` | Optional archive after external indexing |
+
+## Question Hook Conventions
+
+### OpenCode (preferred)
+Use the native **`question` tool** — renders a real UI dialog.
+
+### Other tools (fallback)
+Use bracketed text:
+```
+[QUESTION] Save learnings to .agents/memory/pending/? [y/n/edit]
+```
+
+## Automatic Behavior (via Sisyphus `prompt_append`)
+
+Sisyphus is configured to automatically offer a session reflection at the end of every conversation. This means you typically do not need to invoke this skill manually — it will be prompted when the session winds down.
+
+You can also trigger it manually at any time via the `/session-end` slash command.

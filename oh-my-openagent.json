@@ -3,7 +3,8 @@
   "agents": {
     "sisyphus": {
       "model": "github-copilot/claude-sonnet-4.6",
-      "variant": "max"
+      "variant": "max",
+      "prompt_append": "## Automatic Session Reflection\n\nAt the end of every conversation — when the user's work is done and they signal they are finished (e.g. 'thanks', 'done', 'that's all', 'goodbye', closing remarks) — automatically offer to save a session reflection WITHOUT being asked.\n\nUse the `session-reflector` skill workflow:\n1. Draft a ≤30-line reflection covering: what was done, patterns noticed, corrections received, suggestions.\n2. Ask the user (via `question` tool): \"Save these learnings to `.agents/memory/pending/`? [y/n/edit]\"\n3. On y: write `{YYYY-MM-DD}-{slug}.md` to `.agents/memory/pending/`.\n4. On n or no closing signal detected: skip silently.\n\nDo NOT wait to be asked. Do NOT skip this because the session felt routine. Every session has learnings worth capturing."
     },
     "oracle": {
       "model": "github-copilot/claude-opus-4.6",
