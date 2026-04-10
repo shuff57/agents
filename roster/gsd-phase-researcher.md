@@ -308,7 +308,7 @@ src/
 
 | Category | Items Found | Action Required |
 |----------|-------------|------------------|
-| Stored data | [e.g., "Mem0 memories: user_id='dev-os' in ~X records"] | [code edit / data migration] |
+| Stored data | [e.g., "Holographic memories: ~X records in ~/.hermes/memories/"] | [code edit / data migration] |
 | Live service config | [e.g., "25 n8n workflows in SQLite not exported to git"] | [API patch / manual] |
 | OS-registered state | [e.g., "Windows Task Scheduler: 3 tasks with 'dev-os' in description"] | [re-register tasks] |
 | Secrets/env vars | [e.g., "SOPS key 'webhook_auth_header' — code rename only, key unchanged"] | [none / update key] |

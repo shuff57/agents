@@ -3,7 +3,7 @@
 # Only memory backend and skill format standard are used from Hermes.
 
 memory:
-  backend: mem0
+  provider: holographic
   search: true
 
 skills:
