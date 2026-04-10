@@ -1,46 +1,62 @@
-# Pi Memories
+# Agent Memory
 
-Cross-device memory sync for pi coding agent sessions.
+Persistent cross-session memory for all AI agents. Synced across machines via git.
 
 ## Structure
 
 ```
-pi-memories/
-├── hivemind/
-│   └── memories.jsonl     # Manual learnings — one JSON per line
-├── cass/
-│   └── .gitkeep           # Session index (rebuilt locally, not synced)
-├── swarmmail/
-│   └── .gitkeep           # Cross-agent messages
-└── sync/
-    ├── sync.sh            # macOS/Linux sync script
-    ├── sync.ps1           # Windows sync script
-    └── sync.md            # Sync prompt for pi agents
+memory/
+├── projects/          # Per-project learnings and context
+│   └── <project>/
+│       └── notes.md   # Freeform markdown notes for this project
+├── global/
+│   └── notes.md       # Cross-project learnings, preferences, patterns
+└── README.md
 ```
 
-## Quick Sync
+## Usage
 
-**Windows:**
-```powershell
-cd ~/Documents/GitHub/pi-memories
-.\sync\sync.ps1
-```
+Memory lives in `agent-evo/memory/` and is junctioned to `~/.claude/memory/` so Claude Code reads it automatically from any project.
 
-**macOS/Linux:**
+**Reading memory**: Claude reads `.md` files from `~/.claude/memory/` at session start.
+
+**Writing memory**: Ask the agent to save a learning — it will write or append to the appropriate file.
+
+**Syncing**: Commit and push after sessions with notable learnings. Pull on the other machine before starting work.
+
 ```bash
-cd ~/Documents/GitHub/pi-memories
-bash sync/sync.sh
+# After a session — commit new learnings
+cd ~/Documents/GitHub/agent-evo
+git add memory/
+git commit -m "memory: <project> learnings <date>"
+git push
+
+# On the other machine before starting work
+git pull
 ```
 
-## Memory Format
+## Format
 
-Each line in `hivemind/memories.jsonl` is a JSON object:
-```json
-{"id": "1234567890", "information": "Learning text with WHY it matters", "tags": "tag1,tag2", "session_date": "2026-03-22", "project": "project-name"}
+Each notes file is freeform markdown. Suggested structure:
+
+```markdown
+# Project Name
+
+## Patterns
+- Things that work well
+
+## Gotchas
+- Things to avoid or watch for
+
+## Decisions
+- Key architectural or design choices and why
 ```
 
 ## Setup on New Device
 
+The junction from `~/.claude/memory/` to this directory is created automatically by `install.sh`.
+
+To verify:
 ```bash
-git clone git@github.com:shuff/pi-memories.git ~/Documents/GitHub/pi-memories
+bash install.sh --verify
 ```

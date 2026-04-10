@@ -185,14 +185,7 @@ done
 # ── Memory check ────────────────────────────────────────────────────────────
 info "Memory"
 
-[ -f "$SCRIPT_DIR/memory/hivemind/memories.jsonl" ] && ok "Hivemind store exists" || fail "Hivemind store missing"
-[ -d "$SCRIPT_DIR/memory/cass" ] && ok "CASS directory exists" || fail "CASS directory missing"
-[ -d "$SCRIPT_DIR/memory/swarmmail" ] && ok "Swarmmail directory exists" || fail "Swarmmail directory missing"
-
-if [ -f "$SCRIPT_DIR/memory/hivemind/memories.jsonl" ]; then
-  mem_count=$(wc -l < "$SCRIPT_DIR/memory/hivemind/memories.jsonl")
-  ok "Hivemind has $mem_count memories"
-fi
+[ -d "$SCRIPT_DIR/memory" ] && ok "Memory directory exists" || fail "Memory directory missing"
 
 # ── Live test (optional) ───────────────────────────────────────────────────
 if [ "$LIVE_TEST" = true ]; then

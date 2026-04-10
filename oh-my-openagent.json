@@ -10,7 +10,7 @@
       "variant": "max"
     },
     "explore": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/kimi-k2.5"
     },
     "multimodal-looker": {
       "model": "github-copilot/gemini-pro-3.1",
@@ -31,16 +31,16 @@
       "model": "github-copilot/claude-sonnet-4.6"
     },
     "sisyphus-junior": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/glm-5.1"
     },
     "scout": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/qwen3-coder-next"
     },
     "planner": {
       "model": "github-copilot/claude-sonnet-4.6"
     },
     "code-engineer": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "ollama-cloud/glm-5.1"
     },
     "reviewer": {
       "model": "github-copilot/claude-sonnet-4.6"
@@ -49,25 +49,25 @@
       "model": "github-copilot/claude-sonnet-4.6"
     },
     "debugger": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "ollama-cloud/glm-5.1"
     },
     "designer": {
       "model": "github-copilot/claude-sonnet-4.6"
     },
     "qa-tester": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/qwen3-coder-next"
     },
     "librarian": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/glm-5"
     },
     "red-team": {
       "model": "github-copilot/claude-sonnet-4.6"
     },
     "documenter": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/minimax-m2.7"
     },
     "bowser": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/kimi-k2.5"
     }
   },
   "categories": {
@@ -80,16 +80,16 @@
       "variant": "max"
     },
     "quick": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/qwen3-coder-next"
     },
     "unspecified-low": {
-      "model": "opencode/kimi-k2.5"
+      "model": "ollama-cloud/qwen3-coder-next"
     },
     "unspecified-high": {
       "model": "github-copilot/claude-sonnet-4.6"
     },
     "writing": {
-      "model": "opencode/big-pickle"
+      "model": "ollama-cloud/gemma4-31b-cloud"
     }
   }
 }

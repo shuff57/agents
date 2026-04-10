@@ -3,35 +3,6 @@
   "plugin": [
     "oh-my-openagent@latest"
   ],
-  "provider": {
-    "ollama": {
-      "models": {
-        "gemma4-31b-cloud": {
-          "_launch": true,
-          "name": "gemma4:31b-cloud"
-        }
-      },
-      "name": "Ollama",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://127.0.0.1:11434/v1"
-      }
-    },
-    "lmstudio": {
-      "models": {
-        "gemma-4-26b-a4b": {
-          "name": "google/gemma-4-26b-a4b",
-          "parameters": {
-            "n_ctx": 32768
-          }
-        }
-      },
-      "name": "LM Studio",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://localhost:1234/v1"
-      }
-    }
-  },
+  
   "permission": {}
 }

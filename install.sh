@@ -449,10 +449,10 @@ verify() {
   fi
 
   # Check memory dir
-  if [ -d "$INSTALL_DIR/memory/hivemind" ]; then
+  if [ -d "$INSTALL_DIR/memory" ]; then
     ok "Memory directory found"
   else
-    fail "Memory directory missing hivemind/"
+    fail "Memory directory missing"
     errors=$((errors + 1))
   fi
 
@@ -482,7 +482,7 @@ verify() {
   if command -v claude &>/dev/null; then
     verify_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents" "$CLAUDE_DIR/agents/test-ping.md"
     verify_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills" "$CLAUDE_DIR/skills/playwriter"
-    verify_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory" "$CLAUDE_DIR/memory/hivemind"
+    verify_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory" "$CLAUDE_DIR/memory"
     verify_link "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings" "$CLAUDE_DIR/settings.json"
   fi
 
@@ -490,7 +490,7 @@ verify() {
     local OPENCODE_CFG="$HOME/.config/opencode"
     verify_link "$OPENCODE_DIR/agents" "$INSTALL_DIR/roster" "OpenCode agents" "$OPENCODE_DIR/agents/test-ping.md"
     verify_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills" "$OPENCODE_DIR/skills/playwriter"
-    verify_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory" "$OPENCODE_DIR/memory/hivemind"
+    verify_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory" "$OPENCODE_DIR/memory"
     verify_link "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config" "$OPENCODE_CFG/opencode.json"
     verify_link "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config" "$OPENCODE_CFG/oh-my-openagent.json"
   fi

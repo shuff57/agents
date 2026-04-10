@@ -44,7 +44,7 @@ AGENTS_DIR=~/my/custom/path bash install.sh
 ```
 roster/          # 47 agent definitions + teams + chains (symlinked to tools)
 skills/          # 54 reusable skill packages (SKILL.md + references)
-memory/          # Persistent memory (hivemind JSONL + swarmmail + CASS)
+memory/          # Persistent memory (markdown notes, project-organized, git-synced)
 install.sh       # Full installer with platform detection
 test.sh          # Test suite (19 checks)
 sync.sh          # Minimal symlink-only script
@@ -125,16 +125,23 @@ Tests check:
 - Symlinks are active and tools can see agents
 - No platform-specific text in prompts
 - Skills all have SKILL.md
-- Memory stores exist
+- Memory directory exists
 
 ## Memory
 
-Persistent cross-session memory via hivemind (JSONL + embeddings).
+Persistent cross-session memory via markdown files in `memory/`. Junctioned to `~/.claude/memory/` so Claude reads it automatically.
 
 ```bash
-# Sync memory to remote
-bash memory/sync/sync.sh "sync: project-name 2026-03-29"
+# After a session with notable learnings — commit and push
+git add memory/
+git commit -m "memory: <project> learnings"
+git push
+
+# On another machine before starting work
+git pull
 ```
+
+See [memory/README.md](memory/README.md) for structure and format.
 
 ## Uninstall
 
