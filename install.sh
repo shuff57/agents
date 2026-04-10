@@ -407,12 +407,16 @@ install_graphify() {
 
   # ── Find Python ────────────────────────────────────────────────────────
   _find_python() {
-    # 1. Hardcoded Windows full path (most reliable in Git Bash / MSYS2)
-    local _WIN_PY="/c/Users/shuff57/AppData/Local/Programs/Python/Python314/python.exe"
-    [ -f "$_WIN_PY" ] && echo "$_WIN_PY" && return
-    # 2. Windows py launcher
-    command -v py &>/dev/null && echo "py -3" && return
-    # 3. Standard names
+    # Windows: check $HOME-based paths (works in Git Bash/MSYS2 without hardcoded username)
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || -n "$WINDIR" ]]; then
+      for pyver in Python314 Python313 Python312 Python311 Python310 Python39; do
+        local _candidate="$HOME/AppData/Local/Programs/Python/${pyver}/python.exe"
+        [ -f "$_candidate" ] && echo "$_candidate" && return
+      done
+      # py launcher as fallback (may point to a different install)
+      command -v py &>/dev/null && echo "py" && return
+    fi
+    # Standard names
     for p in python3 python; do
       command -v "$p" &>/dev/null && echo "$p" && return
     done
@@ -444,8 +448,17 @@ install_graphify() {
   local target_dir="${1:-$INSTALL_DIR}"
   if [ -d "$target_dir/.git" ]; then
     info "Installing graphify git hooks in $target_dir..."
-    if PYTHONUTF8=1 $PYTHON -m graphify hook install --path "$target_dir" &>/dev/null 2>&1; then
+    # Must cd into target dir — `--path` flag is ignored by graphify hook install
+    if (cd "$target_dir" && PYTHONUTF8=1 $PYTHON -m graphify hook install) &>/dev/null 2>&1; then
       ok "Graphify git hooks installed"
+      # Patch the hook fallback so it uses our resolved Python, not `python3`
+      # (on Windows, `python3` is often not on PATH)
+      for hook_file in "$target_dir/.git/hooks/post-commit" "$target_dir/.git/hooks/post-checkout"; do
+        if [ -f "$hook_file" ] && grep -q "GRAPHIFY_PYTHON=\"python3\"" "$hook_file" 2>/dev/null; then
+          sed -i "s|GRAPHIFY_PYTHON=\"python3\"|GRAPHIFY_PYTHON=\"$PYTHON\"|g" "$hook_file" 2>/dev/null && \
+            ok "Patched hook fallback Python in $(basename "$hook_file")"
+        fi
+      done
     else
       warn "graphify hook install failed — hooks not set up (graph will still build manually)"
     fi
@@ -717,7 +730,13 @@ summary() {
   fi
   if [ -d "$INSTALL_DIR/graphify-out" ]; then
     local node_count=""
-    node_count=$(python -c "import json; d=json.load(open('$INSTALL_DIR/graphify-out/graph.json')); print(len(d.get('nodes', [])))" 2>/dev/null || echo "?")
+    local _py_for_summary
+    for pyver in Python314 Python313 Python312 Python311 Python310 Python39; do
+      local _c="$HOME/AppData/Local/Programs/Python/${pyver}/python.exe"
+      [ -f "$_c" ] && _py_for_summary="$_c" && break
+    done
+    [ -z "$_py_for_summary" ] && _py_for_summary="python3"
+    node_count=$(PYTHONUTF8=1 "$_py_for_summary" -c "import json; d=json.load(open('$INSTALL_DIR/graphify-out/graph.json')); print(len(d.get('nodes', [])))" 2>/dev/null || echo "?")
     echo "  Graphify Knowledge Graph:"
     echo "    graph -> $INSTALL_DIR/graphify-out/"
     echo "    nodes: $node_count"
