@@ -54,3 +54,5 @@ Cross-project learnings, preferences, and patterns that apply across all work.
   $env:PYTHONUTF8=1; python -m graphify.serve graphify-out/graph.json
   ```
 - **PowerShell env vars**: Set with `$env:VAR=value`, not `export VAR=value`
+
+<!-- hook test 12:01:01 -->
