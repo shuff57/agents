@@ -2,19 +2,14 @@ full:
   - scout
   - planner
   - code-engineer
-  - reviewer
+  - critic
   - documenter
   - red-team
-
-plan-build:
-  - planner
-  - code-engineer
-  - reviewer
 
 info:
   - scout
   - documenter
-  - reviewer
+  - critic
 
 frontend:
   - planner
@@ -39,23 +34,10 @@ omo:
   - scout
   - critic
 
-swarm:
-  - swarm-planner
-  - swarm-worker
-  - swarm-researcher
-
-review:
-  - critic
-  - reviewer
-
 advisory:
   - oracle
   - metis
   - critic
-
-architect-team:
-  - oracle
-  - metis
 
 implementation:
   - code-engineer
@@ -65,31 +47,17 @@ implementation:
 planning:
   - scout
   - planner
-  - plan-draft
   - critic
-
-research-plan-build:
-  - librarian
-  - planner
-  - prometheus
-  - critic
-
-ultrawork:
-  - scout
-  - planner
-  - critic
-  - prometheus
 
 quality:
   - qa-tester
   - critic
-  - reviewer
   - red-team
 
 design:
   - designer
   - code-engineer
-  - reviewer
+  - critic
 
 debug:
   - debugger

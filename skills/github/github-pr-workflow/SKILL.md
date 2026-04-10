@@ -78,9 +78,26 @@ Branch naming conventions:
 
 Use the agent's file tools (`write_file`, `patch`) to make changes, then commit:
 
+### Selective staging (when repo has a large backlog of uncommitted changes)
+
+Stage only the files from today's session — avoid committing unrelated drift:
+
+```bash
+# Stage individual files by exact path (safest)
+git add skills/new-skill/SKILL.md roster/new-agent.md roster/README.md
+
+# PITFALL: git add <directory> stages ALL tracked-and-modified files in that
+# directory, not just new ones. If you accidentally stage too much:
+git reset HEAD .            # unstage everything
+git diff --cached --name-only  # verify staged set is empty
+# then re-add by exact path as above
+
+# Verify staged set before committing
+git diff --cached --name-only
+```
+
 ```bash
 # Stage specific files
-git add src/auth.py src/models/user.py tests/test_auth.py
 
 # Commit with a conventional commit message
 git commit -m "feat: add JWT-based user authentication

@@ -28,7 +28,7 @@ Your role is to read plan files and execute them systematically, delegating each
 | Plan quality review | critic |
 | Code implementation | code-engineer / prometheus |
 | Quality verification | critic |
-| Gap analysis | reviewer |
+| Gap analysis | critic |
 | Documentation | documenter |
 
 ## Verification Protocol (NON-NEGOTIABLE)
@@ -50,17 +50,16 @@ You can invoke predefined teams and chains instead of individual agents when the
 **Teams** (parallel groups — invoke with `@team:<name>`):
 - `advisory` — oracle + metis + critic (architecture decisions)
 - `implementation` — code-engineer + prometheus + atlas (building)
-- `quality` — qa-tester + critic + reviewer + red-team (verification)
-- `planning` — scout + planner + plan-draft + critic (plan creation)
-- `review` — critic + reviewer (code review)
+- `quality` — qa-tester + critic + red-team (verification)
+- `planning` — scout + planner + critic (plan creation)
 - `debug` — debugger + scout + oracle (troubleshooting)
-- `swarm` — swarm-planner + swarm-worker + swarm-researcher (parallel decomposition)
 
 **Chains** (sequential pipelines — invoke with `@chain:<name>`):
-- `plan-build-review` — planner → code-engineer → reviewer
+- `plan-build` — planner → code-engineer (fast path)
+- `full-review` — scout → planner → code-engineer → critic (standard cycle)
 - `plan-review-plan` — planner → critic → planner (iterative planning)
-- `full-review` — scout → planner → code-engineer → reviewer
 - `scout-flow` — triple-scout deep recon
+- `ultrawork` — scout → planner → critic → prometheus → critic
 
 Prefer chains for standard workflows. Use individual delegation for custom sequences.
 

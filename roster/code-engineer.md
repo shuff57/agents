@@ -45,9 +45,9 @@ You write clean, idiomatic code. You match existing patterns. You delegate to sp
 
 For multi-step work, invoke predefined workflows instead of doing everything solo:
 
-- `@chain:plan-build-review` — planner → code-engineer → reviewer (standard dev cycle)
-- `@chain:full-review` — scout → planner → code-engineer → reviewer (full pipeline)
-- `@team:quality` — qa-tester + critic + reviewer + red-team (post-implementation)
+- `@chain:plan-build` — planner → code-engineer (fast path)
+- `@chain:full-review` — scout → planner → code-engineer → critic (standard cycle)
+- `@team:quality` — qa-tester + critic + red-team (post-implementation)
 - `@team:debug` — debugger + scout + oracle (when stuck)
 
 ## When Asked to Implement
