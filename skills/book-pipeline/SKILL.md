@@ -87,7 +87,7 @@ Without `--merged`, falls back to auto-detection (first non-fragment `# X.Y` hea
 
 - **Fragment headers look like section headers**: After assembly, a file may have `# 1.1 Guided Practice 1.1` alongside `# 1.1 Case study...`. The assembler/splitter uses keyword matching against the JSON titles, not just regex, to find true section boundaries.
 - **html_gen.py sends entire file to AI in one call**: Don't pass a 300k-char chapter file. Use per-section files (25–85k chars each) for html_gen.
-- **number.py resets counters per `# X.Y` header**: If multiple fragments share the same section prefix (e.g. `# 1.1 Guided Practice` inside section 1.2), numbering scopes may reset unexpectedly. Acceptable for now — the `--from-sections` chapter concat is used after numbering.
+- **number.py resets counters per `# X.Y` header**: If multiple fragments share the same section prefix (e.g. `# 1.1 Guided Practice` inside section 1.2), numbering scopes may reset unexpectedly. Use `--from-sections` chapter concat after numbering to avoid this.
 - **Slug deduplication**: The `latest_file_for_index()` function picks highest `_vN` suffix — if a dir has both `_v3.md` and `_v4.md` for the same fragment, only `_v4` is used.
 
 ## Prerequisites
@@ -278,6 +278,76 @@ Runs remaster → lint → critic-AI-patch → repeat. Saves checkpoints per ite
 | Lint fails after correction | Pipeline continues, emits lint_score — doesn't block |
 | subprocess step fails (non-zero exit) | Pipeline stops, emits Error JSON |
 
+## Step Optimization Status
+
+| Step | Status | Notes |
+|------|--------|-------|
+| scrape | optimized | |
+| match | optimized | |
+| merge | optimized | |
+| remaster | optimized | lint gate, correction loop, chunked mode, prompt optimizer |
+| number | optimized | see number.py edge cases below |
+| solutions | optimized | idempotency guard, problem counter, lint gate, correction loop (commit 7be21c9) |
+| math | not optimized | subprocess only |
+| youtube | not optimized | subprocess only |
+| html | not optimized | AI call but no lint/correction loop |
+| verify | not optimized | pure Python checks |
+| publish | not optimized | deploy only |
+
+## number.py — Known Element Patterns
+
+The remaster step produces several variants that number.py must handle:
+
+| Pattern | Form | Example |
+|---------|------|---------|
+| Example | `### Example 1.1` | heading, standard |
+| Try It Now | `### Try It Now 1.1` | heading, standard |
+| Try It Now | `**Try It Now — Title**` | bold text (no heading) — also `**Try It Now 1.1 — Title**` |
+| Definition | `**Definition 1.1: Title**` | bold, colon-separated |
+| Problem Set | `## Problem Set` or `### Problem Set` | may appear 2–5× in one section (continuation blocks) |
+| TOC | `## Table of Contents` | h2 heading |
+| TOC | `# Table of Contents` | h1 heading (some sections) |
+| TOC | `**Table of Contents**` | bold text, no heading (some sections) |
+
+Key behaviors (as of fix commit 62c902e):
+- Bold Try It Now is converted to `### Try It Now X.Y.N` automatically
+- Multiple Problem Set blocks in same section: first gets numbered, rest reuse same number
+- TOC is preserved as-is; only bare `Problem Set` links are updated to `Problem Set X.Y`
+- All outputs are idempotent (run twice = identical result)
+
+## Solutions Step Detail
+
+The solutions step generates worked solutions for every Problem Set block:
+
+1. Load numbered (or remastered) file, extract all `### Problem Set` blocks via `_extract_problem_sets()`
+2. **Process blocks in REVERSE order** — each insertion shifts line indices; processing last-to-first keeps all prior indices valid
+3. **Idempotency guard**: if `<!-- Solutions -->` is already in the block text, skip it. After insertion the solutions become part of the block, so this check works on subsequent runs.
+4. **Problem counter** (`_count_problems`): uses `re.findall()` on the full block text (not per-line) because multiple `<td>N)` entries can appear on one line in HTML table format. Falls back to bare `N)` line-start pattern for Chapter Review sections.
+5. Call `AIClient.generate(prompt, ps_text, temperature=0.1)`
+6. **Lint gate** (`_lint_solutions`): checks `<details>` count == expected, all have valid `<summary>Problem N Solution</summary>`, no unclosed tags
+7. **Correction loop**: if lint fails, retry once with failure context appended to prompt
+8. Splice insertion into `output_lines` list by splitting on `\n` and using `list.insert()` — do NOT append to the string then re-split, and do NOT track an offset accumulator (both approaches fail with multi-block sections)
+
+### Pitfalls specific to solutions step
+
+| Pitfall | Fix |
+|---------|-----|
+| Processing PS blocks forward with an offset accumulator | Offset only tracks the `\n` count in the insertion string — `output_lines` list size doesn't change until after the loop. Use **reverse order** instead. |
+| `sum(1 for ln in lines if td_rx.search(ln))` for problem count | HTML tables often put 2+ `<td>N)` entries on one line. Use `td_rx.findall(ps_text)` on the full text. |
+| Checking sentinel in lines after `end_line` | After insertion the solutions are INSIDE the block (block ends at the last `</details>`). Check `"<!-- Solutions -->" in ps_text` instead. |
+| `insertion.count("\n")` as offset for list growth | The list doesn't grow — the insertion is embedded in one string element. Use `list.insert()` per line after splitting on `\n`. |
+
+### Auditing a deterministic pipeline step
+
+When asked to optimize a non-AI pipeline step (number, verify, etc.):
+1. Read the script fully to understand its regex patterns and logic
+2. Run it on all available real remastered sections: `for f in projects/.../Sections_Remastered/1.*.md`
+3. Check element counts: source vs output should match (`grep -c "^### Example"`)
+4. Check idempotency: run output through same script again, `diff` should be empty
+5. Spot-check TOC, first/last elements, and any section with unusual structure (multi-problem-set, bold Try It Now, etc.)
+6. Fix one issue at a time, re-run full suite after each fix
+7. Commit with detailed message listing each bug fixed + verification method
+
 ## Pitfalls
 
 | Pitfall | Fix |
@@ -290,3 +360,4 @@ Runs remaster → lint → critic-AI-patch → repeat. Saves checkpoints per ite
 | `lines` not defined in `_remaster_chunked` | Fixed: `lines = source_text.splitlines(keepends=True)` must be inside `_remaster_chunked`, not inherited from caller |
 | Solutions step has no prompt file | Inline fallback is used automatically — add `prompts/solutions.md` for production |
 | pipeline:execute still calls claude CLI | That's the LEGACY handler — use `pipeline:run` for the new AI-agnostic path |
+| patch tool mangles regex strings in Python files | Use write_file to rewrite the entire script — patch tool double-escapes backslashes inside re.compile() strings |
