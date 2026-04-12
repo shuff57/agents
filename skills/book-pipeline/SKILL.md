@@ -6,151 +6,287 @@ disable-model-invocation: true
 
 # Book Pipeline
 
-> Orchestrate the full bookSHelf textbook processing pipeline by delegating each stage to its specialized skill. Processes sections through: scrape → match → merge → remaster → math-verify → html-gen → verify → publish. Stops for explicit user approval between stages. Mirrors the gb-pipeline approval-gate pattern.
+> Drive the full bookSHelf pipeline via `scripts/workflows/pipeline.py` — an AI-agnostic Python orchestrator that makes direct API calls, writes files to disk, lints, and retries. No dependency on claude CLI, opencode, or any agent harness. The Electron app spawns it and reads the JSON progress stream.
+
+## Architecture (as of 2025)
+
+```
+pipeline.py
+    |
+    ├── step_remaster()    → AIClient.generate() → lint_remaster.py → correction loop
+    ├── step_number()      → subprocess: number.py
+    ├── step_solutions()   → AIClient.generate() per Problem Set block
+    ├── step_html()        → subprocess: html_gen.py (has its own AI call)
+    ├── step_youtube()     → subprocess: youtube_lookup.py
+    ├── step_verify()      → pure Python checks
+    └── step_publish()     → subprocess: publish.py
+```
+
+Steps without their own script (`scrape`, `match`, `merge`, `math`) are delegated via `SUBPROCESS_STEPS` dict — they auto-skip if the script doesn't exist.
+
+## Assembly Step (pre-remaster, book/chapter agnostic)
+
+**Correct pipeline order:**
+```
+merge JSON (N fragments) → assemble per section → remaster per section → number → html
+```
+NOT: remaster all fragments → assemble. Assembling first saves tokens and produces cleaner remaster input.
+
+Two scripts handle assembly. Both are fully book/chapter agnostic — driven by the merged JSON, no hardcoded titles or section numbers.
+
+### assemble_chapter.py
+
+Reads merged chapter JSON + per-fragment source .md files → assembles by merge_tier:
+- `main` → keep in order
+- `include` → fold in after preceding main fragment
+- `borderline` → drop
+
+**Three modes:**
+
+```bash
+# 1. Per-section files (recommended — feed each into pipeline remaster):
+python3 scripts/workflows/assemble_chapter.py \
+  --merged  "projects/Book/remastered/Merged/merged_ch1.json" \
+  --src-dir "projects/Book/source/Chapter_1_Sections" \
+  --output  "projects/Book/remastered/Chapter_1_Assembled_Sections" \
+  --chapter 1 --mode sections
+
+# 2. Per-section + chapter concat in one pass:
+python3 scripts/workflows/assemble_chapter.py \
+  --merged  "projects/Book/remastered/Merged/merged_ch1.json" \
+  --src-dir "projects/Book/source/Chapter_1_Sections" \
+  --output  "projects/Book/remastered/Chapter_1_Assembled_Sections" \
+  --chapter 1 --mode sections --concat
+
+# 3. After remastering all sections, stitch into chapter file:
+python3 scripts/workflows/assemble_chapter.py \
+  --src-dir "projects/Book/remastered/Chapter_1_Remastered_Sections" \
+  --output  "projects/Book/remastered/Chapter_1_Remastered.md" \
+  --chapter 1 --from-sections
+```
+
+Mode `--from-sections` picks up all `1.X_*.md` files from src-dir sorted numerically — no JSON needed. Use it after remastering to build the chapter-level file for number.py / html_gen.py.
+
+Output filenames: `1.1_case_study_using_stents.md`, `1.2_data_basics.md` etc. — section number prefix + slugified title.
+
+### split_chapter_sections.py
+
+Alternative: split an already-assembled monolithic chapter .md back into per-section files. Uses the merged JSON for split-point detection (keyword match on first occurrence of each X.Y section header).
+
+```bash
+python3 scripts/workflows/split_chapter_sections.py \
+  --input   "projects/Book/remastered/Chapter_1_numbered.md" \
+  --output  "projects/Book/remastered/Chapter_1_Sections" \
+  --chapter 1 \
+  --merged  "projects/Book/remastered/Merged/merged_ch1.json"
+```
+
+Without `--merged`, falls back to auto-detection (first non-fragment `# X.Y` header). Auto-detection is unreliable on assembled files that have noisy fragment headers — always pass `--merged` when available.
+
+### Pitfalls
+
+- **Fragment headers look like section headers**: After assembly, a file may have `# 1.1 Guided Practice 1.1` alongside `# 1.1 Case study...`. The assembler/splitter uses keyword matching against the JSON titles, not just regex, to find true section boundaries.
+- **html_gen.py sends entire file to AI in one call**: Don't pass a 300k-char chapter file. Use per-section files (25–85k chars each) for html_gen.
+- **number.py resets counters per `# X.Y` header**: If multiple fragments share the same section prefix (e.g. `# 1.1 Guided Practice` inside section 1.2), numbering scopes may reset unexpectedly. Acceptable for now — the `--from-sections` chapter concat is used after numbering.
+- **Slug deduplication**: The `latest_file_for_index()` function picks highest `_vN` suffix — if a dir has both `_v3.md` and `_v4.md` for the same fragment, only `_v4` is used.
 
 ## Prerequisites
-- bookSHelf project at `C:\Users\shuff\Documents\GitHub\bookSHelf`
-- Source content available (scraped sections or existing markdown)
-- All book-* skills available
+- bookSHelf project at `/mnt/c/Users/shuff57/Documents/GitHub/bookSHelf`
+- Source content available in `projects/{project}/remastered/*_Sections/`
+- AI provider configured (see Provider Config below)
+- `scripts/workflows/lint_remaster.py` present (used as remaster gate)
 
-## When to Use
-- Processing a new textbook section from source to published HTML
-- Running the full pipeline end-to-end with safety checkpoints
-- User wants orchestrated workflow instead of running skills individually
+## Provider Config
 
-## When NOT to Use
-- Only one specific stage needed (use the individual skill directly)
-- User wants silent automation without approval gates
-- Debugging a specific pipeline step
+Priority order (first wins):
+1. CLI flags: `--provider`, `--model`, `--api-key`, `--base-url`
+2. Environment variables: `AI_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_BASE_URL`, etc.
+3. `.env` file in project root (auto-loaded)
 
-## Guardrails
-
-> ⚠️ **Must NOT:**
-> - Skip the approval gate between any stage
-> - Auto-advance after any stage, even if results look clean
-> - Skip book-verify before book-publish
-> - Skip book-math-verify before book-html-gen
-> - Proceed if any stage reports errors without user acknowledgment
-> - Hardcode file paths — derive all paths from project name and section ID
+Supported providers via `ai_client.py`:
+- `openai` — OpenAI or any OpenAI-compatible endpoint
+- `ollama` / `ollama-local` / `ollama-cloud`
+- `gemini`
+- `copilot` — GitHub Copilot (claude-sonnet-4.6); reads OAuth token automatically from `~/.hermes/auth.json`. Use `--provider copilot --model claude-sonnet-4.6`. ~2-5 sec/call vs ~6-7 min for GLM cloud.
+- Any unknown provider string — treated as OpenAI-compatible, reads `{PROVIDER}_BASE_URL`, `{PROVIDER}_API_KEY`, `{PROVIDER}_MODEL` from env
 
 ## Quick Start
-1. Identify the project and section(s) to process
-2. Determine starting point (smart detect based on existing files)
-3. Run each stage with approval gates between them
-4. Publish verified HTML to docs/
 
-## Workflow
+```bash
+cd /mnt/c/Users/shuff57/Documents/GitHub/bookSHelf
 
-### Phase 1: Smart Detect Starting Point
-- **INPUT:** Project name, section ID(s)
-- **ACTION:** Check what already exists:
-  - Source files in `projects/{project}/source_files/`?
-  - Remastered files in `projects/{project}/remastered/`?
-  - HTML files in `projects/{project}/html/`?
-  - Determine which stages to skip vs run
-- **OUTPUT:** Starting stage and file paths
+# Full pipeline, all steps
+python3 scripts/workflows/pipeline.py \
+  --project "Applied Finite Math" --section "5.3"
 
-### Phase 2: Stage 1 — Scrape & Concatenate (if needed)
-- **INPUT:** Project name, source identifier
-- **ACTION:** Invoke book-scrape skill
-- **OUTPUT:** full_source.md in source_files/
-- **GATE:** Show section count and ask user to continue
+# Specific steps only
+python3 scripts/workflows/pipeline.py \
+  --project "Applied Finite Math" --section "5.3" \
+  --steps "remaster,number,html"
 
-### Phase 3: Stage 2 — Section Match & Merge (if supplemental book exists)
-- **INPUT:** Primary and supplemental JSON files
-- **ACTION:**
-  1. Invoke book-section-match to produce mapping
-  2. Show mapping results and get approval
-  3. Invoke book-merge with mapping
-- **OUTPUT:** Merged markdown
-- **GATE:** Show merge summary and ask user to continue
-- **SKIP:** If single source (no supplemental), skip directly to Stage 3
+# Start from a specific step (inclusive)
+python3 scripts/workflows/pipeline.py \
+  --project "Applied Finite Math" --section "5.3" \
+  --from-step remaster
 
-### Phase 4: Stage 3 — Remaster
-- **INPUT:** Source or merged markdown section
-- **ACTION:** Invoke book-remaster skill
-- **OUTPUT:** Remastered markdown in `remastered/` directory
-- **GATE:** Show quality checklist results and ask user to continue
+# Explicit provider
+python3 scripts/workflows/pipeline.py \
+  --project "Applied Finite Math" --section "5.3" \
+  --provider ollama --model llama3.1 --base-url http://localhost:11434
 
-### Phase 5: Stage 4 — Math Verification
-- **INPUT:** Remastered markdown
-- **ACTION:** Invoke book-math-verify skill
-- **OUTPUT:** Math accuracy report
-- **GATE:** Show report summary. If CRITICAL issues found, must fix before continuing.
+# Dry run (no AI calls, validates paths and step order)
+python3 scripts/workflows/pipeline.py \
+  --project "Applied Finite Math" --section "5.3" \
+  --dry-run
+```
 
-### Phase 6: Stage 5 — YouTube Videos (optional)
-- **INPUT:** Remastered markdown section titles
-- **ACTION:** Invoke book-youtube skill
-- **OUTPUT:** Video query JSON files
-- **GATE:** Show video count and ask user to continue (or skip)
+## All CLI Flags
 
-### Phase 7: Stage 6 — HTML Generation
-- **INPUT:** Verified remastered markdown
-- **ACTION:** Invoke book-html-gen skill
-- **OUTPUT:** HTML file in `projects/{project}/html/`
-- **GATE:** Ask user to preview HTML before verification
+| Flag | Description |
+|------|-------------|
+| `--project` | Project name (must match `projects/` subdirectory) |
+| `--section` | Section ID, e.g. `5.3` |
+| `--chapter` | Override chapter number (default: inferred from section) |
+| `--steps` | Comma-separated steps to run (default: all 11) |
+| `--from-step` | Start from this step inclusive |
+| `--provider` | AI provider (overrides env) |
+| `--model` | Model name (overrides env) |
+| `--api-key` | API key (overrides env) |
+| `--base-url` | API base URL (overrides env) |
+| `--remaster-prompt` | Override path to remaster prompt file |
+| `--solutions-prompt` | Override path to solutions prompt file |
+| `--no-chunked` | Disable chunked mode for large sections |
+| `--output-suffix` | Suffix appended before .md/.html on all outputs (e.g. `_v2`) — never overwrites originals, safe for comparison runs |
+| `--dry-run` | Print steps without making any AI calls |
 
-### Phase 8: Stage 7 — HTML Verification
-- **INPUT:** Generated HTML file
-- **ACTION:** Invoke book-verify skill
-- **OUTPUT:** Verification report (PASS/FAIL/WARNINGS)
-- **GATE:** If FAIL, must fix before publishing. If PASS, ask to continue.
+## Step Order and Weights
 
-### Phase 9: Stage 8 — Publish
-- **INPUT:** Verified HTML file
-- **ACTION:** Invoke book-publish skill with --dry-run first
-- **OUTPUT:** Published HTML in docs/ with index updated
-- **GATE:** Show dry-run results, then execute after approval
+Steps run in this order. Progress bar is weighted by step cost:
 
-### Phase 10: Pipeline Complete
-- **INPUT:** All stage results
-- **ACTION:** Produce final summary:
-  - Section(s) processed
-  - Stages completed
-  - Files generated
-  - Issues encountered and resolved
-  - Published locations
-- **OUTPUT:** Pipeline completion report
+| Step | Weight | Implementation |
+|------|--------|----------------|
+| scrape | 5% | subprocess: `scrape_concat.py` |
+| match | 3% | subprocess: `section_matching.py` |
+| merge | 8% | subprocess: `merge.py` |
+| remaster | 25% | direct AIClient call + lint gate + correction loop |
+| number | 5% | subprocess: `number.py` |
+| solutions | 20% | direct AIClient call per Problem Set block |
+| math | 10% | subprocess: `math_verify.py` |
+| youtube | 5% | subprocess: `youtube_lookup.py` |
+| html | 10% | subprocess: `html_gen.py` (has its own AI path) |
+| verify | 5% | pure Python checks |
+| publish | 4% | subprocess: `publish.py` |
 
-## Pipeline State
+## JSON Progress Stream
 
-The pipeline tracks state in `projects/{project}/html/_pipeline_state.json`:
+Every line to stdout is a JSON object. Electron app reads these via `pipeline:progress` IPC events.
 
 ```json
-{
-  "project": "Project Name",
-  "sections": [{
-    "id": "5.5",
-    "title": "Section Title",
-    "steps": {
-      "remaster": {"status": "completed", "completed_at": "..."},
-      "number": {"status": "completed", "completed_at": "..."},
-      "solutions": {"status": "completed", "completed_at": "..."},
-      "math_check": {"status": "completed", "completed_at": "..."},
-      "html": {"status": "completed", "completed_at": "..."},
-      "verify": {"status": "completed", "completed_at": "..."},
-      "publish": {"status": "completed", "completed_at": "..."}
-    }
-  }]
-}
+{"phase": "remaster", "progress": 14, "message": "Calling openai/gpt-4o (375 lines)...", "is_running": true}
+{"phase": "remaster", "progress": 20, "message": "Lint score 62/100 — FAIL (try_it_now). Retrying...", "is_running": true, "lint_score": 62}
+{"phase": "remaster", "progress": 22, "message": "After correction: 88/100 PASS", "is_running": true, "lint_score": 88}
+{"phase": "Complete", "progress": 100, "message": "Pipeline complete: 3 steps | section 5.3", "is_running": false, "result": {...}}
+{"phase": "Error", "progress": 0, "message": "Step 'remaster' raised: ...", "is_running": false, "error": "...", "step": "remaster"}
 ```
+
+## Electron Integration
+
+```js
+// main.js — pipeline:run IPC handler spawns pipeline.py, parses JSON, emits pipeline:progress
+// preload.js — exposes:
+window.electronAPI.runPipeline({
+  project: "Applied Finite Math",
+  section: "5.3",
+  steps: "remaster,number,html",   // optional
+  provider: "openai",              // optional, overrides env
+  model: "gpt-4o",                 // optional
+  dryRun: false,
+});
+
+window.electronAPI.onPipelineProgress((update) => {
+  // update = { phase, progress, message, is_running, lint_score?, result? }
+});
+```
+
+Legacy `window.electronAPI.executePipelineStep()` still works for agent-CLI invocation (kept for backward compat).
+
+## Remaster Step Detail
+
+The remaster step has the most logic:
+1. Load source file, count lines
+2. Choose monolithic (<300 lines) or chunked (≥300 lines) mode
+3. Call `AIClient.generate(prompt, source, temperature=0.3)`
+4. Write output to `{section_slug}_Remastered.md`
+5. Run `lint_remaster.py` — if score < 75 (FAIL):
+   - Build correction prompt from failing rule details
+   - Call AI again with `temperature=0.2`
+   - Re-lint — emit score regardless of pass/fail
+6. Emit `lint_score` and `lint_passed` on the final progress event
+
+Chunked mode: splits on section headers, calls AI per chunk, merges. Falls back to monolithic if no split points found.
+
+## Path Discovery
+
+`ProjectContext` auto-discovers actual directory names by scanning `projects/{project}/remastered/`:
+- Source dir: first subdir containing `_Sections` but NOT `_Remastered`
+- Remastered dir: first subdir containing `_Remastered`
+
+This is important — directory names are project-specific (e.g. `AppliedFiniteMath-3ed-Current_full_source_Sections`) not constructed from project name.
+
+## Prompt Files
+
+| Prompt | Path | Purpose |
+|--------|------|---------|
+| remaster | `prompts/remaster-chapter.md` | Main remaster instructions (184 lines, GOOD version) |
+| solutions | `prompts/solutions.md` | Solutions generation (fallback inline prompt if missing) |
+| html | `scripts/workflows/prompts/create-html-body.md` | HTML conversion |
+
+**Critical:** Always use `prompts/remaster-chapter.md` (project root), NOT `scripts/workflows/prompts/remaster-chapter.md` (weak 147-line version). Pass `--remaster-prompt prompts/remaster-chapter.md` explicitly if in doubt.
+
+## Lint Gate
+
+The linter (`scripts/workflows/lint_remaster.py`) runs automatically after remaster:
+- Threshold: 75/100 to pass
+- 7 rules: try_it_now (25pt), source_attribution (20pt), math_delimiters (15pt), context_pauses (10pt), insight_notes (10pt), header_format (10pt), no_premature_solutions (10pt)
+- Auto-detects if solutions pipeline already ran (skips premature-solutions check)
+
+Run manually:
+```bash
+python3 scripts/workflows/lint_remaster.py \
+  --input "projects/.../Section_Remastered.md" \
+  --source "projects/.../Section.md"
+# Add --json for machine-readable output
+```
+
+## Optimize Prompt (When Many Sections Fail)
+
+If multiple sections fail lint with the same rules, run the optimizer instead of manual fixes:
+```bash
+python3 scripts/workflows/optimize_prompt.py \
+  --prompt prompts/remaster-chapter.md \
+  --target 95 --iterations 6
+```
+Runs remaster → lint → critic-AI-patch → repeat. Saves checkpoints per iteration to `prompts/optimization_runs/`. Locks winner to both prompt locations.
 
 ## Error Handling
 
 | Problem | Action |
 |---------|--------|
-| Stage fails with errors | Stop pipeline, report errors, ask user how to proceed |
-| Math verification finds CRITICAL | Must fix before continuing to HTML gen |
-| HTML verification FAIL | Must fix before publishing |
-| Missing prerequisite files | Report which stage needs to run first |
-| Pipeline state corrupt | Rebuild state from existing files on disk |
+| Source file not found | Check `projects/{project}/remastered/` dir names — use `_find_dir` logic |
+| AI returns empty/short response | Pipeline logs it and continues (doesn't crash) |
+| Step script not found | Auto-skips with `success: True, skipped: True` |
+| Lint fails after correction | Pipeline continues, emits lint_score — doesn't block |
+| subprocess step fails (non-zero exit) | Pipeline stops, emits Error JSON |
 
-## Common Mistakes
+## Pitfalls
 
-| Mistake | Fix |
+| Pitfall | Fix |
 |---------|-----|
-| Skipping math verification | ALWAYS run book-math-verify before book-html-gen |
-| Publishing without verification | ALWAYS run book-verify before book-publish |
-| Not using smart detect | Check existing files to avoid re-running completed stages |
-| Skipping approval gates | NEVER auto-advance — always ask user |
-| Forgetting to commit after publish | Remind user to commit docs/ changes |
+| Assumed dir names don't match reality | ProjectContext scans actual dirs — don't construct paths from project name |
+| `git status` hangs on WSL2+NTFS | Use `git log` or `git diff` instead |
+| Chunked remaster used to bail out saying "Claude must intervene" | Old `remaster_chunked.py` design — `pipeline.py` handles chunking natively now |
+| `detect_split_level()` returns int, not tuple | Fixed in pipeline.py — don't unpack as `level, _ = detect_split_level(...)` |
+| `find_split_points()` returns `list[dict]` with `"line"` key, not tuple | Fixed: use `sp["line"]` not `sp[0]` when iterating split points |
+| `lines` not defined in `_remaster_chunked` | Fixed: `lines = source_text.splitlines(keepends=True)` must be inside `_remaster_chunked`, not inherited from caller |
+| Solutions step has no prompt file | Inline fallback is used automatically — add `prompts/solutions.md` for production |
+| pipeline:execute still calls claude CLI | That's the LEGACY handler — use `pipeline:run` for the new AI-agnostic path |

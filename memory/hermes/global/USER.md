@@ -1,21 +1,9 @@
-User profile: shuff57
-- Uses WSL2 on Windows
-- Prefers Python 3.12
-- Manages agent configuration via agent-evo repository
-- Primary project: bookSHelf (AI textbook enhancement pipeline)
-- Agent setup: Project-level Hermes at .hermes/ with config.yaml
-- External memory/skills sync: /mnt/c/Users/shuff/Documents/GitHub/agent-evo/bookSHelf/
-- Desktop app: bookshelf-app/ (Electron + React + Tailwind)
-- Pipeline: 11 steps (Scrape→Match→Merge→Remaster→Number→Solutions→Math-check→YouTube→HTML→Verify→Publish→Commit)
-- Tech stack: Python 3.8+, Claude Code CLI, MathJax, GitHub Pages
+Scope all chapter-level runs to chapter 1 only before advancing to ch2 — must get explicit go-ahead before starting ch2. Approval gate preference remains even though copilot provider is fast. Also applies to any future chapter boundary (ch2 -> ch3 etc).
 §
-bookSHelf project structure: Uses global skills symlinks for cross-device sync via GitHub. All three agent tool locations point to /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/skills/:
-- ~/.claude/skills/ → agent-evo/skills/
-- ~/.hermes/skills/ → agent-evo/skills/
-- ~/.config/opencode/skills/ → agent-evo/skills/
-
-Project-level .claude/, .config/, and .opencode.json removed as redundant - global symlinks handle skills. Only .hermes/ kept in project for config.yaml and hooks.
-
-Skills source of truth: /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/skills/
+bookSHelf project structure: Global skills symlinks — all three agent tool locations point to /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/skills/. Only .hermes/ kept in project for config.yaml and hooks.
 §
 Default Hermes model: github-copilot/claude-sonnet-4.6 (changed from glm-5.1:cloud). Config at ~/.hermes/config.yaml still has ollama base_url/api_key as fallback.
+§
+bookSHelf remaster standard: full worked solutions are REQUIRED in every Example and Try It Now block -- never truncate or summarize steps. The 3-5 step "conciseness" rule was wrong and has been removed from the prompt.
+§
+bookSHelf pipeline order: fragments -> assemble per section -> remaster per section -> concat into chapter file -> number -> html. NOT remaster fragments first then assemble. Scripts: assemble_chapter.py --mode sections --concat, then remaster, then assemble_chapter.py --from-sections for chapter concat.

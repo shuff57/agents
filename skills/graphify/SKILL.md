@@ -1223,6 +1223,28 @@ graphify claude uninstall  # remove the section
 
 ---
 
+## WSL2 / Linux Usage
+
+This skill's commands are written for **PowerShell** but the user runs **WSL2 (Ubuntu)**. When running on WSL2, translate all PowerShell commands to bash equivalents:
+
+- `New-Item -ItemType Directory -Force -Path graphify-out` → `mkdir -p graphify-out`
+- `Remove-Item -ErrorAction SilentlyContinue ...` → `rm -f ...`
+- `Copy-Item src dst` → `cp src dst`
+- `Get-Content` → `cat`
+- `Out-File -FilePath ... -Encoding utf8` → `> ...`
+- `$env:VAR = "val"` → `export VAR="val"`
+- `& (Get-Content ...) -c "..."` → `$(cat ...) -c "..."`
+- All `python -c` and `python -m` calls work as-is on Linux
+
+When checking for an existing graph, use:
+```bash
+stat graphify-out/GRAPH_REPORT.md 2>/dev/null | grep Modify
+```
+
+**Checking if graphify already ran:** Look for `graphify-out/graph.json` and `graphify-out/GRAPH_REPORT.md`. If both exist and GRAPH_REPORT.md is recent, read it directly — no need to re-run. The GRAPH_REPORT.md contains god nodes, community structure, and suggested questions ready to use.
+
+---
+
 ## Troubleshooting
 
 ### PowerShell 5.1: Vertical scrolling stops working
