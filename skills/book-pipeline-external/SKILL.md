@@ -1,12 +1,14 @@
 ---
-name: book-pipeline
-description: "[ACTIVE — in-session refactor in progress] bookSHelf pipeline at scripts/workflows/. Processes textbook sections end-to-end (source markdown → published HTML) with approval checkpoints between stages. This is the pipeline being rewritten to run in-session (Claude session performs AI steps directly). All new pipeline work belongs here. The frozen pre-refactor external-AI variant is `book-pipeline-external` at scripts/workflows-external/."
+name: book-pipeline-external
+description: "[INACTIVE — frozen snapshot] External-AI bookSHelf pipeline (claude-cli / GitHub Copilot / Ollama / OpenAI-compatible) at scripts/workflows-external/. Preserved as-of just before the in-session refactor began. Use ONLY to run the legacy external pipeline; do not extend or refactor it. For active work use the `book-pipeline` skill (in-session, scripts/workflows/)."
 disable-model-invocation: true
 ---
 
-# Book Pipeline
+# Book Pipeline (External AI)
 
-> Drive the full bookSHelf pipeline via `scripts/workflows/pipeline.py` — an AI-agnostic Python orchestrator that makes direct API calls, writes files to disk, lints, and retries. No dependency on claude CLI, opencode, or any agent harness. The Electron app spawns it and reads the JSON progress stream.
+> Drive the full bookSHelf pipeline via `scripts/workflows-external/pipeline.py` — an AI-agnostic Python orchestrator that makes direct API calls (claude-cli, GitHub Copilot, Ollama, OpenAI-compatible endpoints), writes files to disk, lints, and retries. The current Claude session does not perform the AI work — pipeline.py spawns external providers. The Electron app spawns it and reads the JSON progress stream.
+>
+> **This is the preserved "external AI" pipeline.** Forked from `scripts/workflows/` at the working-tree state captured just before the in-session refactor began (post 8.3-run math-delimiter fixes). For the in-session variant being rewritten in `scripts/workflows/`, use `book-pipeline` instead.
 
 ## Architecture (as of 2025)
 
@@ -25,6 +27,99 @@ pipeline.py
 ```
 
 Steps without their own script (`scrape`, `match`, `merge`, `math`) are delegated via `SUBPROCESS_STEPS` dict — they auto-skip if the script doesn't exist.
+
+## 2026-04-18 updates (external-AI)
+
+Since 2026-04-13 the external-AI path has accumulated the following changes. They apply to both student and teach editions.
+
+### Parallelism (moderate 4-way, env-tunable)
+
+| Step | Env var | Default | Notes |
+|------|---------|---------|-------|
+| `remaster` chunks (student) | `REMASTER_PARALLELISM` | 4 | `pipeline.py:_remaster_chunked` ThreadPoolExecutor. Preserves document order in output. |
+| `remaster-teach` chunks | `REMASTER_PARALLELISM` | 4 | Same helper, teach path. |
+| `math-verify` batches | `MATH_BATCH_PARALLELISM` | 4 | `math_verify.py` batches run concurrently; results aggregated to `all_issues[bi]`. |
+| `html_gen` chunks | `HTML_CHUNK_PARALLELISM` | 4 | Previously hardcoded to 1 (Ollama-cloud rate limits). Lower to 1 for ollama-cloud: `HTML_CHUNK_PARALLELISM=1`. |
+
+For `solutions` + `youtube` — already ran as a parallel pair via `PARALLEL_GROUPS` in `pipeline.py`.
+
+### Copilot token auto-refresh
+
+`ai_client.py:_call_copilot` catches HTTP 401 and calls `_refresh_copilot_token()` to exchange the stored `github_access_token` for a new Copilot OAuth token. The refreshed token is written back to `~/.hermes/auth.json`. One-time initial login via:
+
+```bash
+python scripts/copilot_login.py
+```
+
+Completes GitHub device-flow OAuth, stores both the short-lived Copilot token and the long-lived `github_access_token`. After that, long pipelines that span the 30-minute token TTL recover automatically.
+
+Related fix: `AI_MODEL` env var no longer leaks into the Copilot provider (was causing HTTP 400 when `.env` had `AI_MODEL=glm-5.1:cloud`). Copilot now only reads `COPILOT_MODEL` → hardcoded default `claude-sonnet-4.6`.
+
+### skip-if-fresh (mtime) instead of skip-if-exists
+
+`pipeline.py` adds `_output_fresh(output, *inputs)` and wires it into:
+
+- `step_extract`: skip if source `.md` mtime ≥ merged JSON mtime
+- `step_solutions`: skip if solutions file fresh vs numbered/remastered input AND every PS block has `<!-- Solutions -->`
+- `step_html`: skip if HTML fresh vs best-input mtime
+- `step_youtube`: skip if video queries fresh vs best-input mtime
+
+Stale outputs auto-regenerate without manual deletion.
+
+### Fixup step — two new phases
+
+`step_fixup` now runs two additional deterministic lint passes:
+
+- **A4** (`_lint_renumber_problems`): scans each `<div class="problem-set">`, rewrites `<strong>8.31 Title.</strong>` and `<strong>8.17</strong> <strong>Title.</strong>` to `<strong>Problem K: Title.</strong>` (K is 1-indexed within each set).
+- **A5** (`_lint_move_post_ps_examples`): if any `<div class="example">` appears AFTER a `<div class="problem-set">`, moves it (and any preceding HTML comment) to right before the problem-set so the problem-set stays last on the page.
+
+Both are idempotent.
+
+### Teach-edition watermark
+
+`pipeline.py step_html`, when `ctx.teach_mode` is True, post-processes the fresh HTML to:
+
+1. Add `class="teach-mode"` to the `<body>` tag (preserves any existing classes with a space separator)
+2. Inject `<p class="teacher-edition-subtitle">Teacher Edition</p>` right after the first `<h1>`
+
+CSS rules live in `docs/style.css` (+ the three theme variants `style-canvas-lms.css`, `style-clean-textbook.css`, `style-dark-canvas.css`). The red diagonal banner approach was replaced with a subtitle line in April 2026.
+
+### Shared `docs/images/`
+
+Image files now live at `docs/images/` instead of per-project `docs/<slug>/images/`. All published HTML references images via depth-aware relative paths:
+
+- `docs/<slug>/*.html` → `src="../images/<hash>.jpg"`
+- `docs/teach/<slug>/*.html` → `src="../../images/<hash>.jpg"`
+
+`publish.py::resolve_images` takes a `src_prefix` argument (`"../images/"` student, `"../../images/"` teach). Orphan cleanup scans every `*.html` under `docs/` (not just the current project's dest_dir) so cross-project images are never deleted.
+
+Migration of existing per-project image dirs: `scripts/consolidate_docs_images.py` (one-shot, idempotent).
+
+### html_gen.py hardening
+
+- `_unhtml_math_content`: reverts `<sup>N</sup>` → `^N` / `^{N}` (and `<sub>` → `_`) inside `\(…\)`, `\[…\]`, `$$…$$`. Called from `_strip_code_fences` after every chunk.
+- `_convert_footnotes_outside_math`: the post-assembly footnote converter `re.sub(r"\^(\d+)", r"<sup>\1</sup>", body_content)` now tokenizes math-delim spans first so it only fires on text outside `\(…\)`/`\[…\]`/`$$…$$`. Previously re-introduced `<sup>` inside math after chunk-level cleanup.
+- Per-chunk exception handling broadened: `_convert_one` catches any `Exception` (not just `IOError/RuntimeError/ValueError`) — a single flaky chunk no longer kills the whole HTML step.
+- Gap-filling: when a chunk future raises past all handlers, the result is skipped and the deterministic `md→html` fallback fills the gap so document order stays intact.
+- Defensive `<details>` → `<details class="solution">` rewrite — any bare `<details>` the AI produces gets tagged before `publish.py verify` rejects it as a critical error.
+
+### extract_sections.py
+
+`blocks_to_markdown` now recognizes the merged-JSON image schema `{"type": "image", "reference": "![](images/…)"}`. Previously looked for `src`/`content`/`alt` keys only and silently dropped every image reference during extract.
+
+### Prompts — math-delim rules tightened
+
+- `prompts/remaster-chapter.md`, `prompts/remaster-teach.md`, `prompts/solutions.md`: added "only wrap genuine math in `\(…\)`" rule with good/bad examples (✅ `\(x = 5\)`, ❌ `\(press MENU\)`); forbid HTML tags inside math delimiters.
+- `scripts/workflows-external/prompts/create-html-body.md`: strengthened "Preserve all LaTeX" to explicitly forbid `^N → <sup>N</sup>`, `_i → <sub>i</sub>`, or any HTML tag inside math delimiters.
+
+### New helper scripts
+
+| Script | Purpose | Idempotent |
+|--------|---------|------------|
+| `scripts/copilot_login.py` | GitHub device-flow OAuth → writes `~/.hermes/auth.json` with both tokens | Overwrites prior token |
+| `scripts/consolidate_docs_images.py` | One-shot migration: per-project `images/` → shared `docs/images/`; rewrites HTML refs | ✓ |
+| `scripts/fix_problem_set_layout.py` | Retrofit A4/A5 fixup on already-published sections | ✓ |
+| `scripts/clean_8_3_math.py`, `scripts/clean_8_4_math.py`, `scripts/patch_8_2_html.py` | One-shot math/image cleanup for specific sections generated before the html_gen hardening landed | ✓ |
 
 ## Assembly Step (pre-remaster, book/chapter agnostic)
 
@@ -47,21 +142,21 @@ Reads merged chapter JSON + per-fragment source .md files → assembles by merge
 
 ```bash
 # 1. Per-section files (recommended — feed each into pipeline remaster):
-python3 scripts/workflows/assemble_chapter.py \
+python3 scripts/workflows-external/assemble_chapter.py \
   --merged  "projects/Book/remastered/Merged/merged_ch1.json" \
   --src-dir "projects/Book/source/Chapter_1_Sections" \
   --output  "projects/Book/remastered/Chapter_1_Assembled_Sections" \
   --chapter 1 --mode sections
 
 # 2. Per-section + chapter concat in one pass:
-python3 scripts/workflows/assemble_chapter.py \
+python3 scripts/workflows-external/assemble_chapter.py \
   --merged  "projects/Book/remastered/Merged/merged_ch1.json" \
   --src-dir "projects/Book/source/Chapter_1_Sections" \
   --output  "projects/Book/remastered/Chapter_1_Assembled_Sections" \
   --chapter 1 --mode sections --concat
 
 # 3. After remastering all sections, stitch into chapter file:
-python3 scripts/workflows/assemble_chapter.py \
+python3 scripts/workflows-external/assemble_chapter.py \
   --src-dir "projects/Book/remastered/Chapter_1_Remastered_Sections" \
   --output  "projects/Book/remastered/Chapter_1_Remastered.md" \
   --chapter 1 --from-sections
@@ -76,7 +171,7 @@ Output filenames: `1.1_case_study_using_stents.md`, `1.2_data_basics.md` etc. �
 Alternative: split an already-assembled monolithic chapter .md back into per-section files. Uses the merged JSON for split-point detection (keyword match on first occurrence of each X.Y section header).
 
 ```bash
-python3 scripts/workflows/split_chapter_sections.py \
+python3 scripts/workflows-external/split_chapter_sections.py \
   --input   "projects/Book/remastered/Chapter_1_numbered.md" \
   --output  "projects/Book/remastered/Chapter_1_Sections" \
   --chapter 1 \
@@ -105,12 +200,12 @@ This is now an **official pipeline step** (step 5, between remaster and number).
 
 ```bash
 # Via pipeline
-python3 scripts/workflows/pipeline.py --project "Introduction to Stats" --section "1.2" --steps normalize
+python3 scripts/workflows-external/pipeline.py --project "Introduction to Stats" --section "1.2" --steps normalize
 
 # Standalone
-python3 scripts/workflows/normalize_headings.py \
+python3 scripts/workflows-external/normalize_headings.py \
   --project "Introduction to Stats" --chapter 1 [--dry-run]
-python3 scripts/workflows/normalize_headings.py \
+python3 scripts/workflows-external/normalize_headings.py \
   --dir "projects/Introduction to Stats/remastered/Chapter_1_Remastered" [--dry-run]
 ```
 
@@ -124,7 +219,7 @@ python3 scripts/workflows/normalize_headings.py \
 - bookSHelf project at `/mnt/c/Users/shuff57/Documents/GitHub/bookSHelf`
 - Source content available in `projects/{project}/remastered/*_Sections/`
 - AI provider configured (see Provider Config below)
-- `scripts/workflows/lint_remaster.py` present (used as remaster gate)
+- `scripts/workflows-external/lint_remaster.py` present (used as remaster gate)
 
 ## Provider Config
 
@@ -147,26 +242,26 @@ Supported providers via `ai_client.py`:
 cd /mnt/c/Users/shuff57/Documents/GitHub/bookSHelf
 
 # Full pipeline, all steps
-python3 scripts/workflows/pipeline.py \
+python3 scripts/workflows-external/pipeline.py \
   --project "Applied Finite Math" --section "5.3"
 
 # Specific steps only
-python3 scripts/workflows/pipeline.py \
+python3 scripts/workflows-external/pipeline.py \
   --project "Applied Finite Math" --section "5.3" \
   --steps "remaster,number,html"
 
 # Start from a specific step (inclusive)
-python3 scripts/workflows/pipeline.py \
+python3 scripts/workflows-external/pipeline.py \
   --project "Applied Finite Math" --section "5.3" \
   --from-step remaster
 
 # Explicit provider
-python3 scripts/workflows/pipeline.py \
+python3 scripts/workflows-external/pipeline.py \
   --project "Applied Finite Math" --section "5.3" \
   --provider ollama --model llama3.1 --base-url http://localhost:11434
 
 # Dry run (no AI calls, validates paths and step order)
-python3 scripts/workflows/pipeline.py \
+python3 scripts/workflows-external/pipeline.py \
   --project "Applied Finite Math" --section "5.3" \
   --dry-run
 ```
@@ -197,18 +292,18 @@ Steps run in this order. Progress bar is weighted by step cost:
 | Step | Weight | Implementation |
 |------|--------|----------------|
 | scrape | 5% | subprocess: `scrape_concat.py` |
-| match | 3% | subprocess: `section_matching.py` |
-| merge | 8% | subprocess: `merge.py` |
-| remaster | 25% | direct AIClient call + lint gate + correction loop |
-| normalize | 3% | subprocess: `normalize_headings.py` (renumber headings, remove cross-section content) |
+| merge | 10% | subprocess: `merge.py` |
+| extract | 3% | inline: `extract_sections.py` — merged JSON → per-section markdown (handles `{"reference": "![](…)"}` images) |
+| remaster | 25% | direct AIClient calls (**parallel** chunks, 4×) + lint gate + correction loop |
+| remaster-teach | 20% | teach edition: condenses student remaster (parallel chunks, 4×) |
 | number | 5% | subprocess: `number.py` |
-| solutions | 20% | direct AIClient call per Problem Set block |
-| math | 10% | subprocess: `math_verify.py` |
-| youtube | 5% | subprocess: `youtube_lookup.py` |
-| html | 10% | subprocess: `html_gen.py` (has its own AI path) |
+| solutions | 20% | direct AIClient call per Problem Set block (runs in parallel with `youtube`) |
+| youtube | 5% | inline AIClient call → `_video_queries.json` |
+| math | 10% | subprocess: `math_verify.py` (**parallel** AI batches, 4×) |
+| html | 10% | subprocess: `html_gen.py` (**parallel** chunks, 4×, env `HTML_CHUNK_PARALLELISM`) |
+| fixup | 5% | inline lint: markdown-heading divs, chunk markers, duplicate IDs, problem renumber (A4), post-PS example reorder (A5), teach-mode body class + subtitle injection |
 | stitch | 4% | subprocess: `stitch_chapter_html.py` (no AI — body concat) |
-| verify | 5% | pure Python checks |
-| publish | 4% | subprocess: `publish.py` |
+| publish | 6% | subprocess: `publish.py` — images go to shared `docs/images/`; src paths prefixed `../images/` (student) or `../../images/` (teach) |
 
 ## JSON Progress Stream
 
@@ -292,7 +387,7 @@ When `_numbered_dir` is set (Layout B), numbered/solutions/mathverify files live
 
 **Running pipeline end-to-end on Layout B project:**
 ```bash
-python3 scripts/workflows/pipeline.py \
+python3 scripts/workflows-external/pipeline.py \
   --project "Introduction to Stats" --section "1.2" \
   --provider ollama --model glm-5.1:cloud
 # scrape/match/merge auto-skip (source_files/ present but step scripts may not apply)
@@ -328,22 +423,22 @@ Introduction to Stats/
 |--------|------|---------|
 | remaster | `prompts/remaster-chapter.md` | Main remaster instructions (184 lines, GOOD version) |
 | solutions | `prompts/solutions.md` | Solutions generation (fallback inline prompt if missing) |
-| html | `scripts/workflows/prompts/create-html-body.md` | HTML conversion |
+| html | `scripts/workflows-external/prompts/create-html-body.md` | HTML conversion |
 
-**Critical:** Always use `prompts/remaster-chapter.md` (project root), NOT `scripts/workflows/prompts/remaster-chapter.md` (weak 147-line version). Pass `--remaster-prompt prompts/remaster-chapter.md` explicitly if in doubt.
+**Critical:** Always use `prompts/remaster-chapter.md` (project root), NOT `scripts/workflows-external/prompts/remaster-chapter.md` (weak 147-line version). Pass `--remaster-prompt prompts/remaster-chapter.md` explicitly if in doubt.
 
-HTML prompt: `scripts/workflows/prompts/create-html-body.md` (body fragment, CORRECT for pipeline) vs `prompts/create-static-html.md` (slideshow/full-page, WRONG — generates scroll-snap slideshow not bookSHelf format). `step_html` must NOT pass `--prompt` at all — html_gen.py defaults to `create-html-body.md` + `build_template_from_partials` which is correct.
+HTML prompt: `scripts/workflows-external/prompts/create-html-body.md` (body fragment, CORRECT for pipeline) vs `prompts/create-static-html.md` (slideshow/full-page, WRONG — generates scroll-snap slideshow not bookSHelf format). `step_html` must NOT pass `--prompt` at all — html_gen.py defaults to `create-html-body.md` + `build_template_from_partials` which is correct.
 
 ## Lint Gate
 
-The linter (`scripts/workflows/lint_remaster.py`) runs automatically after remaster:
+The linter (`scripts/workflows-external/lint_remaster.py`) runs automatically after remaster:
 - Threshold: 75/100 to pass
 - 7 rules: try_it_now (25pt), source_attribution (20pt), math_delimiters (15pt), context_pauses (10pt), insight_notes (10pt), header_format (10pt), no_premature_solutions (10pt)
 - Auto-detects if solutions pipeline already ran (skips premature-solutions check)
 
 Run manually:
 ```bash
-python3 scripts/workflows/lint_remaster.py \
+python3 scripts/workflows-external/lint_remaster.py \
   --input "projects/.../Section_Remastered.md" \
   --source "projects/.../Section.md"
 # Add --json for machine-readable output
@@ -353,7 +448,7 @@ python3 scripts/workflows/lint_remaster.py \
 
 If multiple sections fail lint with the same rules, run the optimizer instead of manual fixes:
 ```bash
-python3 scripts/workflows/optimize_prompt.py \
+python3 scripts/workflows-external/optimize_prompt.py \
   --prompt prompts/remaster-chapter.md \
   --target 95 --iterations 6
 ```
@@ -488,7 +583,7 @@ When asked to optimize a non-AI pipeline step (number, verify, etc.):
 `step_html` calls `html_gen.py` as a subprocess (step 9). Input selection: solutions > numbered > remastered.
 
 1. **Idempotency**: if `ctx.html_file` already exists, skip entirely (size logged).
-2. **Prompt**: do NOT pass `--prompt` to html_gen.py. Its default is `scripts/workflows/prompts/create-html-body.md` + `build_template_from_partials` → correct bookSHelf format. Passing `--prompt prompts/create-static-html.md` produces a scroll-snap slideshow embedded inside the bookSHelf template wrapper, creating double-`<body>` / double-`<!DOCTYPE>` garbage.
+2. **Prompt**: do NOT pass `--prompt` to html_gen.py. Its default is `scripts/workflows-external/prompts/create-html-body.md` + `build_template_from_partials` → correct bookSHelf format. Passing `--prompt prompts/create-static-html.md` produces a scroll-snap slideshow embedded inside the bookSHelf template wrapper, creating double-`<body>` / double-`<!DOCTYPE>` garbage.
 3. **Subprocess timeout**: large sections (700–2000 lines of markdown) take 15–25 min. Timeout must be ≥1800s. Default was 900s — caused silent timeout failures where html_gen.py succeeded but pipeline wrapper killed it.
 4. **Video queries**: if `ctx.video_queries_file` exists, passes `--video-queries` to html_gen.py (written by step_youtube).
 5. **`html_gen.py` lint gate** (`_lint_body`): validates AI body output — checks length ≥100, `<html>` tag if prompt requests full page, balanced `<details>` blocks. Two known false-positive bugs (fixed in `b9d6906`):
@@ -520,7 +615,7 @@ When asked to optimize a non-AI pipeline step (number, verify, etc.):
 | `find_split_points()` returns `list[dict]` with `"line"` key, not tuple | Fixed: use `sp["line"]` not `sp[0]` when iterating split points |
 | `lines` not defined in `_remaster_chunked` | Fixed: `lines = source_text.splitlines(keepends=True)` must be inside `_remaster_chunked`, not inherited from caller |
 | Solutions step writes to wrong file | Must write to `ctx.solutions_file` (`_Solutions.md`), not overwrite the numbered file in place |
-| html_gen.py uses wrong prompt | Default is `scripts/workflows/prompts/create-html-body.md` (body fragment) + `build_template_from_partials` → CORRECT bookSHelf format. Do NOT pass `--prompt prompts/create-static-html.md` — that generates a scroll-snap slideshow which gets embedded inside the template, producing double-`<!DOCTYPE>`/double-`<body>` garbage. |
+| html_gen.py uses wrong prompt | Default is `scripts/workflows-external/prompts/create-html-body.md` (body fragment) + `build_template_from_partials` → CORRECT bookSHelf format. Do NOT pass `--prompt prompts/create-static-html.md` — that generates a scroll-snap slideshow which gets embedded inside the template, producing double-`<!DOCTYPE>`/double-`<body>` garbage. |
 | html_gen.py `<details>` lint false positive | `body.count("<details>")` misses `<details class="solution">`. Use `re.findall(r'<details\b', body)`. Fixed `b9d6906`. |
 | html_gen.py `<html>` lint false positive | `create-html-body.md` contains `<html>` in a "DO NOT include" instruction. Lint fired even on correct body-fragment output. Fix: check `"DO NOT include" not in prompt`. Fixed `c9f9ac7`. |
 | subprocess timeout | Large sections (700–2000 lines MD) take 15–25 min. Default 900s too short — pipeline silently killed html_gen.py after it finished. Use 1800s. Fixed `2c78b6e`. |
