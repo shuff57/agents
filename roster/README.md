@@ -1,6 +1,6 @@
 # Agent Roster
 
-29 agents, 11 teams, 8 chains. Single source of truth for Claude Code and OpenCode.
+29 agents, 11 teams, 8 chains for Claude Code.
 
 ## Agent Categories
 
@@ -79,17 +79,7 @@ See [agent-chain.yaml](agent-chain.yaml) for sequential pipelines.
 
 ## Model Assignments
 
-| Model | Agents | Role |
-|-------|--------|------|
-| `github-copilot/claude-sonnet-4.6` | prometheus, code-engineer, atlas, evolver | Heavy implementation & quality |
-| `github-copilot/claude-opus-4.6` | planner, oracle, metis | Deep reasoning & planning |
-| `github-copilot/gemini-3.1-pro-preview` | visual-analyzer | Vision specialist |
-| `ollama/glm-5.1:cloud` | critic | #2 intelligence — detailed review |
-| `ollama/glm-5:cloud` | red-team | Elite security testing |
-| `ollama/minimax-m2.7:cloud` | meta-orchestrator, scout, librarian | Fast, strong, cheap — coordination & research |
-| `ollama/kimi-k2.5:cloud` | debugger, designer | Structured analysis & creative |
-| `ollama/qwen3-coder-next:cloud` | qa-tester | Code-focused testing |
-| `ollama/gemma4:31b-cloud` | documenter, bowser, test-ping, summarizer, all 9 experts | Lightweight read-only tasks |
+Models are chosen per agent via Claude Code's agent frontmatter or settings. Claude Code dispatches tasks to Opus, Sonnet, or Haiku based on the agent's configured model.
 
 ## Setup
 
@@ -98,4 +88,4 @@ See [agent-chain.yaml](agent-chain.yaml) for sequential pipelines.
 bash sync.sh
 ```
 
-This symlinks `roster/` to both `~/.claude/agents/` and `~/.config/opencode/superpowers/agents/`.
+This symlinks `roster/` to `~/.claude/agents/`.

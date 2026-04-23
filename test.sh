@@ -135,7 +135,6 @@ done < <(grep 'agent:' "$ROSTER/agent-chain.yaml")
 info "Symlink verification"
 
 CLAUDE_AGENTS="$HOME/.claude/agents"
-OPENCODE_AGENTS="$HOME/.config/opencode/superpowers/agents"
 
 if [ -L "$CLAUDE_AGENTS" ] || [ -d "$CLAUDE_AGENTS" ]; then
   if [ -f "$CLAUDE_AGENTS/test-ping.md" ]; then
@@ -147,23 +146,13 @@ else
   fail "Claude Code agents not linked ($CLAUDE_AGENTS)"
 fi
 
-if [ -L "$OPENCODE_AGENTS" ] || [ -d "$OPENCODE_AGENTS" ]; then
-  if [ -f "$OPENCODE_AGENTS/test-ping.md" ]; then
-    ok "OpenCode can see agents"
-  else
-    fail "OpenCode agents dir exists but test-ping.md not found"
-  fi
-else
-  fail "OpenCode agents not linked ($OPENCODE_AGENTS)"
-fi
-
 # ── No platform-specific text ───────────────────────────────────────────────
 info "Platform-agnostic check"
 
 platform_refs=0
 for f in "$ROSTER/"*.md; do
   [ "$(basename "$f")" = "README.md" ] && continue
-  if grep -qi "for this pi workspace\|for this opencode workspace\|for this pi " "$f"; then
+  if grep -qi "for this pi workspace\|for this pi " "$f"; then
     fail "$(basename "$f") — contains platform-specific text"
     platform_refs=$((platform_refs + 1))
   fi

@@ -1,4 +1,4 @@
-agent-evo: skills/ (88 dirs) symlinked to ~/.hermes/skills/, ~/.claude/skills/, ~/.config/opencode/skills/. fact_store ids 1-3 for map+roster.
+agent-evo: skills/ (88 dirs) symlinked to ~/.hermes/skills/ and ~/.claude/skills/. fact_store ids 1-3 for map+roster.
 §
 Pipeline: scrape→match→merge→remaster→normalize→number→solutions→math→youtube→html→stitch→verify→publish. AI client fixes: from_args accepts task_type; from_env/create_client no longer default to "openai" (require AI_PROVIDER env/.env); DEFAULT_TIMEOUT=900s; .env has AI_PROVIDER=ollama, AI_MODEL=glm-5.1:cloud, AI_TIMEOUT=1800. html_gen: create-html-body.md + build_template (no --prompt flag). Stitch: stitch_chapter_html.py (no AI). Run sections sequentially (not parallel) to avoid GLM overload. ProjectContext: _find_chapter_dir for Layout B.
 §

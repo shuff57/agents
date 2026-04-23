@@ -1,7 +1,7 @@
 # agent-evo Project Notes
 
 Repo: `C:\Users\shuff57\Documents\GitHub\agent-evo`
-Purpose: Agent configuration, skills, memory system, and evolution infrastructure for OpenCode/Claude.
+Purpose: Agent configuration, skills, memory system, and evolution infrastructure for Claude Code.
 
 ---
 
@@ -16,9 +16,7 @@ agent-evo/
 │   ├── session-reflector/     ← kept (user choice)
 │   ├── graphify/              ← auto-created by graphify install
 │   └── ...
-├── evolution/                 ← agent evolution plugin (TypeScript)
-│   └── plugin/
-│       └── index.ts           ← CLEANED: hivemind/hermes refs removed
+├── evolution/                 ← evolution workspace (config, backups, tests)
 ├── graphify-out/              ← GITIGNORED: auto-rebuilt on commit/checkout
 │   ├── graph.json             ← 790 nodes, 1073 edges, 64 communities (as of Apr 2026)
 │   └── GRAPH_REPORT.md
@@ -93,7 +91,6 @@ After `git pull` on second machine, run:
 pip install graphifyy mcp
 python -m graphify install           # deploys skill + hook
 python -m graphify hook install      # installs git hooks
-python -m graphify opencode install  # registers OpenCode plugin
 ```
 Set `PYTHONUTF8=1` in shell profile if on Windows.
 Verify junction to memory/ is intact or recreate it.

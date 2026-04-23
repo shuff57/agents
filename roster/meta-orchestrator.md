@@ -19,9 +19,7 @@ When given a build request:
 3. Ask specific questions: "How do I register a custom tool with renderCall?" not "Tell me about extensions"
 4. Wait for the combined response before proceeding
 
-**Platform-specific dispatch:**
-- In Claude Code: use parallel Agent calls or TeamCreate + SendMessage
-- In OpenCode: use @mention dispatch
+**Dispatch:** use parallel Agent calls or TeamCreate + SendMessage.
 
 ### Phase 2: Build
 Once you have research from all experts:

@@ -67,13 +67,6 @@ Examine `roster/agent-chain.yaml` and `roster/teams.yaml`:
 3. Propose minimal routing config edits (add/remove/reorder routing rules only)
 4. Never delete routing rules for pinned agents
 
-## Pass 4 — OmO Config Evolution
-
-Examine `oh-my-opencode.json` (root level) if present:
-1. Check model assignments for agents with high correction rates — a cheaper model may be misconfigured for a complex task, or an expensive model is wasted on trivial tasks
-2. Propose model reassignments only when there is clear signal across 3+ sessions
-3. Never reassign Tier-3 agents
-
 ## Divergence Classification
 
 Classify each observed gap into exactly one type:

@@ -8,7 +8,7 @@ metadata:
   hermes:
     tags: [hermes, setup, configuration, multi-agent, spawning, cli, gateway, development]
     homepage: https://github.com/NousResearch/hermes-agent
-    related_skills: [claude-code, codex, opencode]
+    related_skills: [claude-code, codex]
 ---
 
 # Hermes Agent
@@ -371,7 +371,7 @@ Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/con
 | Kilo Code | API key | `KILOCODE_API_KEY` |
 | Custom endpoint | Config | `model.base_url` + `model.api_key` in config.yaml |
 
-Plus: AI Gateway, OpenCode Zen, OpenCode Go, MiniMax CN, GitHub Copilot ACP.
+Plus: AI Gateway, MiniMax CN, GitHub Copilot ACP.
 
 Full provider docs: https://hermes-agent.nousresearch.com/docs/integrations/providers
 

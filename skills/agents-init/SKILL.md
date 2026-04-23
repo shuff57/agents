@@ -170,7 +170,7 @@ List executables in each non-system directory in `$PATH`. These are the director
 
 ```bash
 # Scan these directories (skip /usr/bin, /bin, /sbin which are mostly OS internals):
-for dir in /usr/local/bin ~/.local/bin ~/.cargo/bin ~/.opencode/bin ~/.lmstudio/bin /snap/bin \
+for dir in /usr/local/bin ~/.local/bin ~/.cargo/bin ~/.lmstudio/bin /snap/bin \
            ~/.config/Code/User/globalStorage/github.copilot-chat/copilotCli \
            ~/.config/Code/User/globalStorage/github.copilot-chat/debugCommand; do
   [ -d "$dir" ] && echo "=== $dir ===" && ls -1 "$dir" 2>/dev/null | sort
@@ -196,7 +196,7 @@ Group discovered tools by category and present with the `question` tool (multi-s
 
 | Category | What to include |
 |----------|----------------|
-| **AI & Agent Tools** | claude, opencode, copilot, lms, playwriter, uipro, etc. |
+| **AI & Agent Tools** | claude, copilot, lms, playwriter, uipro, etc. |
 | **Project-Specific** | Tools matching project domain (e.g., cli-anything-freecad for CAD projects) |
 | **Languages & Runtimes** | node, bun, python3, go, rustc, etc. |
 | **Code Quality** | basedpyright, biome, eslint, ruff, mypy, etc. |

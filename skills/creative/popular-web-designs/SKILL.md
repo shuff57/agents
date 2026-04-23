@@ -118,7 +118,6 @@ those carry more visual identity than the specific font face.
 | `minimax.md` | Minimax | Bold dark interface with neon accents |
 | `mistral.ai.md` | Mistral AI | French-engineered minimalism, purple-toned |
 | `ollama.md` | Ollama | Terminal-first, monochrome simplicity |
-| `opencode.ai.md` | OpenCode AI | Developer-centric dark theme, full monospace |
 | `replicate.md` | Replicate | Clean white canvas, code-forward |
 | `runwayml.md` | RunwayML | Cinematic dark UI, media-rich layout |
 | `together.ai.md` | Together AI | Technical, blueprint-style design |
@@ -204,4 +203,4 @@ Match the design to the content:
 - **Playful / friendly:** PostHog, Figma, Lovable, Zapier, Miro
 - **Premium / luxury:** Apple, BMW, Stripe, Superhuman, Revolut
 - **Data-dense / dashboards:** Sentry, Kraken, Cohere, ClickHouse
-- **Monospace / terminal aesthetic:** Ollama, OpenCode, x.ai, VoltAgent
+- **Monospace / terminal aesthetic:** Ollama, x.ai, VoltAgent

@@ -33,7 +33,7 @@ description: Use when ending a work session or starting a new one to persist lea
    - Corrections received (what changed due to feedback)
    - Suggestions for skills or routing improvements
 
-2. Ask the user (using the `question` tool in OpenCode, or bracketed text in other tools):
+2. Ask the user with bracketed text:
 
    > "Save these learnings to `.agents/memory/pending/`? [y/n/edit]"
 
@@ -87,10 +87,6 @@ If the project uses a knowledge graph (e.g. LightRAG), indexing can be done sepa
 
 ## Question Hook Conventions
 
-### OpenCode (preferred)
-Use the native **`question` tool** — renders a real UI dialog.
-
-### Other tools (fallback)
 Use bracketed text:
 ```
 [QUESTION] Save learnings to .agents/memory/pending/? [y/n/edit]

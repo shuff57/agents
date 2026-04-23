@@ -7,7 +7,7 @@ description: Use when external agents need to discover and control the OGRE embe
 
 ## What this skill does
 
-Provides a repeatable workflow for external agents (Playwriter, OpenCode, and CLI tooling) to discover OGRE Desktop's Electron remote debugging endpoint and control embedded browser targets through CDP.
+Provides a repeatable workflow for external agents (Playwriter and CLI tooling) to discover OGRE Desktop's Electron remote debugging endpoint and control embedded browser targets through CDP.
 
 The Electron main process writes the current debugger port to:
 
@@ -84,7 +84,7 @@ node "$CDP_SCRIPT" click 1 "button:has-text('Next')"
    curl "http://127.0.0.1:${PORT}/json"
    ```
 
-3. In Playwriter/OpenCode automation, attach using the discovered CDP endpoint (the WebSocket URL from `/json`), then interact with the embedded page target.
+3. In Playwriter automation, attach using the discovered CDP endpoint (the WebSocket URL from `/json`), then interact with the embedded page target.
 
 ## 4) Example grading-session workflow
 

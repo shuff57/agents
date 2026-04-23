@@ -26,7 +26,7 @@ Source of truth: /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/roster/teams.ya
 
 ## Invocation syntax
 
-In Claude Code or OpenCode:
+In Claude Code:
   @team:<name>  <your prompt>
 
 Examples:
@@ -173,5 +173,5 @@ Format:
   Never invoke domain experts naked — they are research-only agents.
 - "full" includes red-team (6 agents total). Don't underestimate the cost.
 - Teams have no built-in synthesis step. You or atlas must read and combine outputs.
-- @team syntax works in Claude Code and OpenCode. Hermes itself uses delegate_task
+- @team syntax works in Claude Code. Hermes itself uses delegate_task
   for parallel subagent work.

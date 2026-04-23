@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agents - install script
-# Clones the repo (if needed), symlinks agents to Claude Code and OpenCode,
+# Clones the repo (if needed), symlinks agents to Claude Code,
 # and runs a verification pass.
 #
 # Usage:
@@ -14,8 +14,6 @@ set -euo pipefail
 REPO_URL="${AGENTS_REPO_URL:-https://github.com/shuff57/agent-evo.git}"
 INSTALL_DIR="${AGENTS_DIR:-$HOME/Documents/GitHub/agent-evo}"
 CLAUDE_DIR="$HOME/.claude"
-OPENCODE_DIR="$HOME/.config/opencode/superpowers"
-OPENCODE_PLUGINS="$HOME/.config/opencode/plugins"
 
 # ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -50,27 +48,11 @@ check_prereqs() {
   fi
   ok "git found"
 
-  # Check for at least one supported tool
-  local tools_found=0
-
   if command -v claude &>/dev/null; then
     ok "Claude Code found: $(claude --version 2>/dev/null | head -1)"
-    tools_found=$((tools_found + 1))
   else
-    warn "Claude Code not found — skipping Claude Code setup"
-  fi
-
-  if command -v opencode &>/dev/null; then
-    ok "OpenCode found"
-    tools_found=$((tools_found + 1))
-  else
-    warn "OpenCode not found — skipping OpenCode setup"
-  fi
-
-  if [ "$tools_found" -eq 0 ]; then
-    fail "Neither Claude Code nor OpenCode found. Install at least one:"
-    echo "  Claude Code: https://docs.anthropic.com/en/docs/claude-code"
-    echo "  OpenCode:    https://github.com/nicepkg/opencode"
+    fail "Claude Code not found. Install it:"
+    echo "  https://docs.anthropic.com/en/docs/claude-code"
     exit 1
   fi
 }
@@ -214,64 +196,42 @@ backup_and_link_file() {
 link_all() {
   info "Linking agents, skills, memory, commands, and hooks..."
 
-  if command -v claude &>/dev/null; then
-    backup_and_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents"
-    backup_and_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills"
-    backup_and_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory"
+  backup_and_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents"
+  backup_and_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills"
+  backup_and_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory"
 
-    # Symlink settings.json
-    if [ -f "$INSTALL_DIR/settings.json" ]; then
-      backup_and_link_file "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings"
-    fi
-
-    # Link custom commands (ultrawork, deep-interview, etc.)
-    mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/hooks"
-    if [ -d "$INSTALL_DIR/commands" ]; then
-      for cmd in "$INSTALL_DIR/commands/"*.md; do
-        [ -f "$cmd" ] || continue
-        local cmd_name
-        cmd_name="$(basename "$cmd")"
-        cp -f "$cmd" "$CLAUDE_DIR/commands/$cmd_name"
-      done
-      ok "Claude Code commands synced"
-    fi
-
-    # Link custom hooks
-    if [ -d "$INSTALL_DIR/hooks" ]; then
-      for hook in "$INSTALL_DIR/hooks/"*; do
-        [ -f "$hook" ] || continue
-        local hook_name
-        hook_name="$(basename "$hook")"
-        cp -f "$hook" "$CLAUDE_DIR/hooks/$hook_name"
-      done
-      ok "Claude Code hooks synced"
-    fi
+  # Symlink settings.json
+  if [ -f "$INSTALL_DIR/settings.json" ]; then
+    backup_and_link_file "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings"
   fi
 
-  if command -v opencode &>/dev/null; then
-    local OPENCODE_CFG="$HOME/.config/opencode"
-    backup_and_link "$OPENCODE_DIR/agents" "$INSTALL_DIR/roster" "OpenCode agents"
-    backup_and_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills"
-    backup_and_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory"
+  # Link custom commands (ultrawork, deep-interview, etc.)
+  mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/hooks"
+  if [ -d "$INSTALL_DIR/commands" ]; then
+    for cmd in "$INSTALL_DIR/commands/"*.md; do
+      [ -f "$cmd" ] || continue
+      local cmd_name
+      cmd_name="$(basename "$cmd")"
+      cp -f "$cmd" "$CLAUDE_DIR/commands/$cmd_name"
+    done
+    ok "Claude Code commands synced"
+  fi
 
-    # Symlink opencode config files
-    if [ -f "$INSTALL_DIR/opencode.json" ]; then
-      backup_and_link_file "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config"
-    fi
-    if [ -f "$INSTALL_DIR/oh-my-openagent.json" ]; then
-      backup_and_link_file "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config"
-    fi
+  # Link custom hooks
+  if [ -d "$INSTALL_DIR/hooks" ]; then
+    for hook in "$INSTALL_DIR/hooks/"*; do
+      [ -f "$hook" ] || continue
+      local hook_name
+      hook_name="$(basename "$hook")"
+      cp -f "$hook" "$CLAUDE_DIR/hooks/$hook_name"
+    done
+    ok "Claude Code hooks synced"
   fi
 }
 
 # ── Evolution Engine ───────────────────────────────────────────────────────
 install_evolution() {
-  info "Installing evolution engine..."
-
-  # Symlink evolution plugin to OpenCode plugins directory
-  if command -v opencode &>/dev/null; then
-    backup_and_link "$OPENCODE_PLUGINS/evolution-engine" "$INSTALL_DIR/evolution/plugin" "Evolution engine plugin"
-  fi
+  info "Setting up evolution workspace..."
 
   # Install Hermes memory backend (source install only — not available on PyPI)
   if command -v uv &>/dev/null; then
@@ -293,18 +253,6 @@ install_evolution() {
   else
     warn "uv not found — skipping Hermes install (memory will use fallback JSONL)"
     warn "To install manually: https://github.com/NousResearch/hermes-agent"
-  fi
-
-  # Install plugin dependencies
-  if [ -f "$INSTALL_DIR/evolution/plugin/package.json" ]; then
-    info "Installing plugin dependencies..."
-    if command -v bun &>/dev/null; then
-      (cd "$INSTALL_DIR/evolution/plugin" && bun install --silent 2>/dev/null) && ok "Plugin deps installed (bun)" || warn "Plugin deps install failed"
-    elif command -v npm &>/dev/null; then
-      (cd "$INSTALL_DIR/evolution/plugin" && npm install --silent 2>/dev/null) && ok "Plugin deps installed (npm)" || warn "Plugin deps install failed"
-    else
-      warn "Neither bun nor npm found — plugin deps not installed"
-    fi
   fi
 
   # Create _workspace directories (gitignored, device-local)
@@ -331,12 +279,11 @@ install_evolution() {
   if [ -f "$INSTALL_DIR/.gitignore" ]; then
     if ! grep -q "_workspace" "$INSTALL_DIR/.gitignore"; then
       echo "_workspace/" >> "$INSTALL_DIR/.gitignore"
-      echo "evolution/plugin/node_modules/" >> "$INSTALL_DIR/.gitignore"
       ok "Updated .gitignore"
     fi
   fi
 
-  ok "Evolution engine installed"
+  ok "Evolution workspace ready"
 }
 
 # ── Graphify ───────────────────────────────────────────────────────────────
@@ -519,21 +466,10 @@ verify() {
     ok "$label OK"
   }
 
-  if command -v claude &>/dev/null; then
-    verify_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents" "$CLAUDE_DIR/agents/test-ping.md"
-    verify_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills" "$CLAUDE_DIR/skills/playwriter"
-    verify_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory" "$CLAUDE_DIR/memory"
-    verify_link "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings" "$CLAUDE_DIR/settings.json"
-  fi
-
-  if command -v opencode &>/dev/null; then
-    local OPENCODE_CFG="$HOME/.config/opencode"
-    verify_link "$OPENCODE_DIR/agents" "$INSTALL_DIR/roster" "OpenCode agents" "$OPENCODE_DIR/agents/test-ping.md"
-    verify_link "$OPENCODE_DIR/skills" "$INSTALL_DIR/skills" "OpenCode skills" "$OPENCODE_DIR/skills/playwriter"
-    verify_link "$OPENCODE_DIR/memory" "$INSTALL_DIR/memory" "OpenCode memory" "$OPENCODE_DIR/memory"
-    verify_link "$OPENCODE_CFG/opencode.json" "$INSTALL_DIR/opencode.json" "OpenCode config" "$OPENCODE_CFG/opencode.json"
-    verify_link "$OPENCODE_CFG/oh-my-openagent.json" "$INSTALL_DIR/oh-my-openagent.json" "oh-my-openagent config" "$OPENCODE_CFG/oh-my-openagent.json"
-  fi
+  verify_link "$CLAUDE_DIR/agents" "$INSTALL_DIR/roster" "Claude Code agents" "$CLAUDE_DIR/agents/test-ping.md"
+  verify_link "$CLAUDE_DIR/skills" "$INSTALL_DIR/skills" "Claude Code skills" "$CLAUDE_DIR/skills/playwriter"
+  verify_link "$CLAUDE_DIR/memory" "$INSTALL_DIR/memory" "Claude Code memory" "$CLAUDE_DIR/memory"
+  verify_link "$CLAUDE_DIR/settings.json" "$INSTALL_DIR/settings.json" "Claude Code settings" "$CLAUDE_DIR/settings.json"
 
   # Validate agent frontmatter
   info "Validating agent frontmatter..."
@@ -583,15 +519,6 @@ verify() {
     errors=$((errors + 1))
   fi
 
-  for efile in index.ts observability.ts safety-guard.ts rollback.ts drift-detector.ts; do
-    if [ -f "$INSTALL_DIR/evolution/plugin/$efile" ]; then
-      ok "evolution/plugin/$efile found"
-    else
-      fail "evolution/plugin/$efile missing"
-      errors=$((errors + 1))
-    fi
-  done
-
   for cfile in safety-checksums.json agent-pins.json model-pricing.json; do
     if [ -f "$INSTALL_DIR/evolution/config/$cfile" ]; then
       ok "evolution/config/$cfile found"
@@ -606,15 +533,6 @@ verify() {
   else
     fail "Gen-0 factory snapshot missing"
     errors=$((errors + 1))
-  fi
-
-  if command -v opencode &>/dev/null; then
-    if [ -f "$OPENCODE_PLUGINS/evolution-engine/index.ts" ] 2>/dev/null; then
-      ok "Evolution plugin symlink works"
-    else
-      fail "Evolution plugin symlink broken"
-      errors=$((errors + 1))
-    fi
   fi
 
   if grep -q "_workspace" "$INSTALL_DIR/.gitignore" 2>/dev/null; then
@@ -645,27 +563,17 @@ summary() {
   echo "  Memory:  $INSTALL_DIR/memory/"
   echo ""
 
-  if command -v claude &>/dev/null; then
-    echo "  Claude Code:"
-    echo "    agents -> $INSTALL_DIR/roster/"
-    echo "    skills -> $INSTALL_DIR/skills/"
-    echo "    memory -> $INSTALL_DIR/memory/"
-    echo "    settings.json -> $INSTALL_DIR/settings.json"
-  fi
-  if command -v opencode &>/dev/null; then
-    echo "  OpenCode:"
-    echo "    agents -> $INSTALL_DIR/roster/"
-    echo "    skills -> $INSTALL_DIR/skills/"
-    echo "    memory -> $INSTALL_DIR/memory/"
-    echo "    opencode.json -> $INSTALL_DIR/opencode.json"
-  fi
+  echo "  Claude Code:"
+  echo "    agents -> $INSTALL_DIR/roster/"
+  echo "    skills -> $INSTALL_DIR/skills/"
+  echo "    memory -> $INSTALL_DIR/memory/"
+  echo "    settings.json -> $INSTALL_DIR/settings.json"
   echo ""
-  if [ -d "$INSTALL_DIR/evolution/plugin" ]; then
-    echo "  Evolution Engine:"
-    echo "    plugin -> ~/.config/opencode/plugins/evolution-engine/"
-    echo "    config -> $INSTALL_DIR/evolution/config/"
+  if [ -d "$INSTALL_DIR/evolution" ]; then
+    echo "  Evolution Workspace:"
+    echo "    config  -> $INSTALL_DIR/evolution/config/"
     echo "    backups -> $INSTALL_DIR/evolution/backups/"
-    echo "    tests -> $INSTALL_DIR/evolution/tests/"
+    echo "    tests   -> $INSTALL_DIR/evolution/tests/"
     echo ""
   fi
   if [ -d "$INSTALL_DIR/graphify-out" ]; then
@@ -683,8 +591,7 @@ summary() {
     echo "    rebuild: python -m graphify build (or commit to trigger hook)"
     echo ""
   fi
-  echo "  Edit agents/skills/memory in the repo — all tools see changes instantly."
-  echo "  Evolution engine observes sessions and proposes improvements at session end."
+  echo "  Edit agents/skills/memory in the repo — Claude Code sees changes instantly."
   echo ""
 
   echo "  Quick test:  claude -p 'use the test-ping agent'"

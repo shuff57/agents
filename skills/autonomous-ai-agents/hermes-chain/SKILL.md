@@ -25,7 +25,7 @@ Source of truth: /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/roster/agent-ch
 
 ## Invocation syntax
 
-In Claude Code or OpenCode:
+In Claude Code:
   @chain:<name>  <your prompt>
 
 Examples:
@@ -188,5 +188,5 @@ Format:
 - plan-build skips the critic gate — if quality matters, use full-review instead.
 - deep-interview-then-build requires the user to RESPOND to metis's questions before
   the chain continues. Don't use it in fully autonomous/unattended workflows.
-- @chain syntax works in Claude Code and OpenCode. In Hermes, manually sequence
+- @chain syntax works in Claude Code. In Hermes, manually sequence
   agents with delegate_task or pass output between tool calls.

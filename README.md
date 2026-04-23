@@ -1,6 +1,6 @@
 # Agent-Evo
 
-Self-evolving agent framework — 32 agents, 13 teams, 10 chains, 55 skills, persistent memory, and a self-evolution engine. Single source of truth for Claude Code and OpenCode.
+Self-evolving agent framework for Claude Code — agents, teams, chains, skills, persistent memory, and an evolution workspace.
 
 ## Install
 
@@ -13,18 +13,18 @@ git clone https://github.com/shuff57/agent-evo.git ~/Documents/GitHub/agent-evo 
 ```bash
 git clone https://github.com/shuff57/agent-evo.git ~/Documents/GitHub/agent-evo
 cd ~/Documents/GitHub/agent-evo
-bash install.sh    # detects tools, symlinks, sets up peers + GSD, verifies
+bash install.sh    # detects platform, symlinks into ~/.claude, verifies
 bash test.sh       # runs full test suite
 ```
 
 ### What `install.sh` does
 
 1. Detects your platform (Linux, macOS, Windows/MSYS)
-2. Checks for Claude Code and/or OpenCode
-3. Backs up any existing agents in `~/.claude/agents/` and `~/.config/opencode/superpowers/agents/`
-4. Symlinks `roster/`, `skills/`, and `memory/` to both tool directories
-5. Sets up **claude-peers-mcp** (peer discovery + messaging between Claude instances)
-6. Installs **GSD** (Get Shit Done — spec-driven development framework)
+2. Checks for Claude Code
+3. Backs up any existing agents in `~/.claude/agents/`
+4. Symlinks `roster/`, `skills/`, `memory/`, and `settings.json` into `~/.claude/`
+5. Installs the Hermes memory backend (if `uv` is available)
+6. Sets up graphify knowledge-graph hooks
 7. Validates all agents, teams, chains, and symlinks
 
 ### Configuration
@@ -42,17 +42,18 @@ AGENTS_DIR=~/my/custom/path bash install.sh
 ## Structure
 
 ```
-roster/          # 47 agent definitions + teams + chains (symlinked to tools)
-skills/          # 54 reusable skill packages (SKILL.md + references)
-memory/          # Persistent memory (markdown notes, project-organized, git-synced)
-install.sh       # Full installer with platform detection
-test.sh          # Test suite (19 checks)
-sync.sh          # Minimal symlink-only script
+roster/          # agent definitions + teams + chains (symlinked to ~/.claude/agents)
+skills/          # reusable skill packages (SKILL.md + references)
+memory/          # persistent memory (markdown notes, project-organized, git-synced)
+evolution/       # evolution workspace (config + backups + tests)
+install.sh       # full installer with platform detection
+test.sh          # test suite (structure + integrity checks)
+sync.sh          # minimal symlink-only script
 ```
 
 ## Roster
 
-47 agents organized into 8 categories plus GSD. See [roster/README.md](roster/README.md) for the full breakdown.
+Agents are organized into categories. See [roster/README.md](roster/README.md) for the full breakdown.
 
 | Category | Agents |
 |----------|--------|
@@ -63,36 +64,16 @@ sync.sh          # Minimal symlink-only script
 | Implementation | code-engineer, prometheus, swarm-worker, documenter |
 | Orchestration | atlas, meta-orchestrator |
 | Visual & Browser | visual-analyzer, bowser |
-| Domain Experts | 9 experts (extensions, theme, skills, config, ui, prompts, agents, cli, keybindings) + test-ping |
-| GSD | 17 agents (executor, planner, verifier, debugger, ui-auditor, codebase-mapper, etc.) |
+| Domain Experts | extensions, theme, skills, config, ui, prompts, agents, cli, keybindings + test-ping |
 
 ## Teams & Chains
 
 **Teams** group agents for coordinated work. **Chains** are sequential pipelines where each step's output feeds the next.
 
 ```bash
-# View teams
 cat roster/teams.yaml
-
-# View chains
 cat roster/agent-chain.yaml
 ```
-
-## Claude Peers
-
-Multi-instance peer discovery and messaging via MCP. Requires [Bun](https://bun.sh).
-
-- Installed at `~/claude-peers-mcp/` by `install.sh`
-- Registered as a user-scope MCP server for Claude Code
-- Launch with channels: `claude --dangerously-load-development-channels server:claude-peers`
-
-## GSD (Get Shit Done)
-
-Meta-prompting and spec-driven development framework. Installed globally by `install.sh` via `npx get-shit-done-cc`.
-
-- Start a project: `/gsd:new-project`
-- Quick task: `/gsd:quick`
-- See all commands: `/gsd:help`
 
 ## Adding an Agent
 
@@ -114,7 +95,7 @@ No `sync.sh` needed after adding files — the symlink points to the directory, 
 ## Testing
 
 ```bash
-bash test.sh          # structural + integrity checks (19 tests)
+bash test.sh          # structural + integrity checks
 bash test.sh --live   # also invoke test-ping via Claude Code
 ```
 
@@ -122,14 +103,14 @@ Tests check:
 - All agents have valid YAML frontmatter (`name`, `description`)
 - All agents have non-empty system prompts
 - All team/chain references resolve to agent files
-- Symlinks are active and tools can see agents
+- Symlinks are active and Claude Code can see agents
 - No platform-specific text in prompts
 - Skills all have SKILL.md
 - Memory directory exists
 
 ## Memory
 
-Persistent cross-session memory via markdown files in `memory/`. Junctioned to `~/.claude/memory/` so Claude reads it automatically.
+Persistent cross-session memory via markdown files in `memory/`. Symlinked to `~/.claude/memory/` so Claude reads it automatically.
 
 ```bash
 # After a session with notable learnings — commit and push
@@ -146,9 +127,9 @@ See [memory/README.md](memory/README.md) for structure and format.
 ## Uninstall
 
 ```bash
-rm ~/.claude/agents                              # remove Claude Code symlink
+rm ~/.claude/agents                              # remove Claude Code agents symlink
 rm ~/.claude/skills                              # remove Claude Code skills symlink
 rm ~/.claude/memory                              # remove Claude Code memory symlink
-rm ~/.config/opencode/superpowers/agents          # remove OpenCode symlink
-rm -rf ~/Documents/GitHub/agent-evo                  # remove repo
+rm ~/.claude/settings.json                       # remove Claude Code settings symlink
+rm -rf ~/Documents/GitHub/agent-evo              # remove repo
 ```
