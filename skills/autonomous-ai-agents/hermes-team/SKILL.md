@@ -17,6 +17,8 @@ triggers:
 Teams run multiple agents IN PARALLEL on the same prompt.
 Use a team when you want simultaneous perspectives or parallel coverage.
 Use a chain when you need sequential handoff. (See hermes-chain skill.)
+If you need teammates that TALK TO EACH OTHER and share a task list,
+use the cc-team skill for native Claude Code teams instead.
 
 Source of truth: /mnt/c/Users/shuff57/Documents/GitHub/agent-evo/roster/teams.yaml
 

@@ -22,7 +22,9 @@ User says: *"run book pipeline for 8.4 of Introduction to Stats"* (optionally `-
 
 ## ALL_STEPS — verified execution table
 
-`ALL_STEPS = [scrape, merge, extract, remaster, remaster-teach, number, solutions, youtube, math, html, fixup, stitch, publish]` (verified against `scripts/workflows-external/pipeline.py:88`).
+`ALL_STEPS = [scrape, merge, extract, normalize-tags, remaster, remaster-teach, number, solutions, youtube, math, html, fixup, stitch, publish]` (verified against `scripts/workflows/pipeline.py:101`).
+
+**Note on `normalize-tags`** (added 2026-04-19): a deterministic pre-remaster step that converts source-format `> **Example X.Y**` blockquote-bold tags into `### Example X.Y` H3 headings. This eliminates a class of remaster format bugs where the AI (in-session or external) preserves the source format instead of converting it. Idempotent — safe to re-run. Only present in active `scripts/workflows/`, not in the frozen `scripts/workflows-external/`.
 
 `TEACH_PIPELINE_STEPS = [remaster-teach, number, solutions, youtube, math, html, fixup, publish]` (no scrape/merge/extract/remaster/stitch — verified at line 120).
 
@@ -33,6 +35,7 @@ User says: *"run book pipeline for 8.4 of Introduction to Stats"* (optionally `-
 | 1 | scrape | Bash | `python3 scripts/workflows/scrape_concat.py --project "$PROJECT" --source <source-dir>` |
 | 2 | merge | Bash | `python3 scripts/workflows/merge.py --input <main.json> --output <merged_chN.json> [--supplemental <s1.json> <s2.json>] [--chapter $CHAPTER]` |
 | 3 | extract | Bash | `python3 scripts/workflows/extract_sections.py --input "<merge_dir>/merged/merged_ch${CHAPTER}.json" --output-dir "$PROJ/remastered/Chapter_${CHAPTER}_Source" --chapter $CHAPTER` |
+| 3b | normalize-tags | Bash | `python3 scripts/workflows/normalize_source_tags.py --project "$PROJECT" --chapter $CHAPTER --section $SECTION` (deterministic source cleanup; runs between extract and remaster) |
 | 4 | remaster | AI (you) | See "Remaster" below |
 | 5 | remaster-teach | AI (you), `--teach` only | See "Remaster-teach" below |
 | 6 | number | Bash | `python3 scripts/workflows/number.py --input <remastered.md> --output <numbered.md> --chapter $CHAPTER` |
@@ -64,7 +67,44 @@ Every AI step follows this shape (mirrors what each `step_*` does internally):
 - Output: `Chapter_${CHAPTER}_Remastered/${SECTION}_*.md`
 - Lint: `python3 scripts/workflows/lint_remaster.py --input <output> --source <input> --json` — threshold 75/100 (in script)
 - Correction loop: feed lint JSON findings back, regenerate failing-rule sections, re-lint
-- **Bigger batches:** do NOT chunk on size. The external pipeline chunks at >300 lines for API token reasons. You don't have that constraint.
+- **Chunking threshold: 800 lines** (matches `pipeline.py:step_remaster CHUNK_THRESHOLD = 800`). Below that, do the whole section in one pass. Above that, use the sub-agent pattern below.
+
+#### Sub-agent chunking pattern (for sections > 800 lines)
+
+Same pattern used for step 5 (remaster-teach). Reuses `remaster_chunked.py` which handles all deterministic split/merge bookkeeping.
+
+1. **Split** the source into chunks + manifest:
+   ```bash
+   python3 scripts/workflows/remaster_chunked.py split \
+     --input "$PROJ/remastered/Chapter_${CHAPTER}_Source/${SECTION}_*.md" \
+     --output-dir "$PROJ/remastered/Chapter_${CHAPTER}_Remastered/_chunks_${SECTION}/"
+   ```
+   Produces `chunk_000_preamble.md`, `chunk_001_<slug>.md`, … plus `manifest.json` with cross-chunk context (prev/next titles + boundary paragraphs + running element counts).
+
+2. **Dispatch one sub-agent per chunk in a single message** (parallel). Each Agent call:
+   - `subagent_type: general-purpose` (or a specialized agent if one exists)
+   - `prompt`: include (a) the full `prompts/remaster-chapter.md` contents, (b) the chunk's input file path, (c) the manifest's cross-chunk context fields for that chunk, (d) instruction to write output to `chunk_NNN_<slug>_remastered.md` in the same dir.
+   - Read Try It Now starting number from the manifest's `running_element_counts.tryitnow_before` so numbering stays chapter-sequential.
+
+3. **Merge** chunks back into the final section:
+   ```bash
+   python3 scripts/workflows/remaster_chunked.py merge \
+     --chunk-dir "$PROJ/remastered/Chapter_${CHAPTER}_Remastered/_chunks_${SECTION}/" \
+     --output "$PROJ/remastered/Chapter_${CHAPTER}_Remastered/${SECTION}_*.md"
+   ```
+
+4. **Lint** the merged output once (same `lint_remaster.py --json` call as monolithic). If failing, you can re-dispatch only the offending chunk(s) — re-run steps 2–3 for just that chunk.
+
+**When to use a sub-agent vs. inline work:** sub-agent calls have setup cost; only worth it for large sections where parallelism beats the overhead. For sections between 800 and ~1500 lines, 3–5 sub-agents usually completes in roughly the time of one monolithic call.
+
+**Pre-generation checklist — read before you start writing:**
+
+1. **Examples / Try It Nows / Guided Practice / Definitions use `### H3` headings.** NEVER `> **Example X.Y**` blockquote-bold. NEVER `## Example` H2. The prompt's "Heading format — STRICT" section is non-negotiable; verify with the ✓/✗ examples there if unsure.
+2. **Try It Now numbering is chapter-sequential** (`Try It Now 8.41`, `8.42`, `8.43`, …) NOT per-subsection (`8.1`, `8.2`, `8.1`, …). The number resets per chapter, not per subsection.
+3. **Source attribution required:** `**Source:** [Book Name]` within the first 3 lines of every Example, Try It Now, Guided Practice, Definition, and Problem Set. Use "Main Text" if unknown.
+4. **`> **Label:**` blockquote-bold IS correct and REQUIRED for callouts** — Context Pause, Insight Note, named procedure boxes, named rules. Just NOT for Examples / Try It Nows / Guided Practice / Definitions.
+5. **Aim for textbook density, not study-guide compactness.** Per-subsection: at least 1 Context Pause, 1 Insight Note, 1 Try It Now, plus all source-derived Examples/Definitions/Guided Practices preserved verbatim. Use display math `$$...$$` for any computation worth showing the steps for; use explicit `**Solution:**` headers and bolded sub-step breaks within Examples.
+6. **Currency:** always write `\$1,000` (escaped dollar + plain comma). Avoid `\$1{,}000` with curly braces — it's stylistically inconsistent and historically tripped the math-delimiter lint. The lint has been patched to strip `\$` before regex matching (so curly-brace form no longer fails outright), but the canonical form remains `\$1,000`. Do NOT leave the dollar sign unescaped (`$500` collides with math-mode detection).
 
 ### Step 5 — remaster-teach (mirror of `step_remaster_teach()`)
 - Only runs in teach mode (when user invoked with `--teach`)
@@ -72,6 +112,7 @@ Every AI step follows this shape (mirrors what each `step_*` does internally):
 - Prompt: `prompts/remaster-teach.md`
 - Output: `Chapter_${CHAPTER}_RemasteredTeach/${SECTION}_*.md` (assigned to `ctx.remastered_file` in teach mode so all later steps pick it up automatically)
 - Lint: same `lint_remaster.py` (rules apply to both editions)
+- **Chunking threshold: 800 lines** (matches `pipeline.py:step_remaster_teach CHUNK_THRESHOLD = 800`). Teach inputs are often 1500–3000 lines because they read the expanded student edition, so the sub-agent pattern almost always applies. Use the same split/dispatch/merge flow from step 4 — just swap `prompts/remaster-chapter.md` → `prompts/remaster-teach.md` and point the output at `Chapter_${CHAPTER}_RemasteredTeach/`.
 
 ### Step 7 — solutions (mirror of `step_solutions()`)
 - Input: `ctx.numbered_file` (numbered or numbered-teach depending on mode)
@@ -91,6 +132,7 @@ Every AI step follows this shape (mirrors what each `step_*` does internally):
   7. Write the spliced result to `ctx.solutions_file` (separate file — does NOT overwrite the numbered file)
 - Lint: `_lint_solutions(solution_text, expected) -> (ok, msg, actual_count)` at `pipeline.py:1405`. Checks `<details>` count == expected, every `<summary>` present, no unclosed tags.
 - On hard-fail (`actual_count == 0`): skip the write entirely. On soft-fail (count > 0 but ≠ expected): write anyway — partial solutions beat none.
+- **Sub-agent dispatch** (recommended when total problems ≥ 8, or ≥ 2 PS blocks): each PS block is independent — dispatch one sub-agent per block in a single parallel message. Each agent receives its block text + `prompts/solutions.md` and returns the `<details>` blocks for that block's problems. Main orchestrator then splices them in reverse order (same `list.insert()` logic). Works for small cases too but overhead isn't worth it below ~8 problems total.
 
 ### Step 8 — youtube (mirror of `step_youtube()`)
 - Input: best of `..._Solutions.md > ..._Numbered.md > ..._Remastered.md`
@@ -138,6 +180,7 @@ Every AI step follows this shape (mirrors what each `step_*` does internally):
       mismatched `{ }` braces; `\frac` arity; obvious arithmetic errors in worked solutions}
      ```
   5. **Lint:** `lint_report(report_text) -> (ok, msg)` at `math_verify.py:300` — requires `Overall Assessment:` line + `Executive Summary` section.
+  6. **Sub-agent dispatch** (recommended when source > 800 lines OR display-math count > 30): `math_verify.py:_split_math_elements(text)` splits the source into individual math-element blocks (examples, definitions, solutions). Dispatch one sub-agent per block (or per coherent group of 5–10 blocks) with a focused "verify these spans" prompt. Each agent returns a list of issues; main orchestrator merges into the report's "AI review" section. Matches `math_verify.py`'s existing `ThreadPoolExecutor` pattern but at the in-session level.
 
 ### Step 10 — html (mirror of `step_html()`)
 - Input: best of `..._Solutions.md > ..._Numbered.md > ..._Remastered.md`
@@ -160,6 +203,7 @@ Every AI step follows this shape (mirrors what each `step_*` does internally):
   4. After it returns, the file at `--output` is the final HTML.
 - Lint: `_lint_html(html_text) -> (ok, issues)` at `pipeline.py:1470` — checks `<html>` present, `<body>` present, no `{content}`/`{title}` placeholders, length ≥ 100, balanced `<details\b` count.
 - Correction loop: if lint fails, edit your body file (most failures are body-content issues, not template), re-run html_gen.py, re-lint.
+- **Sub-agent dispatch for body generation** (recommended when input > 15,000 chars, matching `html_gen.py:HTML_CHUNK_THRESHOLD`): split the solutions markdown on H2 boundaries (same `find_split_points` as remaster). Dispatch one sub-agent per H2 section to produce its portion of the body fragment per `create-html-body.md`. Each agent receives the section markdown + the prompt + the running problem counter (so global `<div class="problem" id="problem-X-Y-N">` IDs don't collide). Main orchestrator concatenates the fragments, writes to `_body_temp_${SECTION}.html`, then calls `html_gen.py --body-file` once to wrap the template. Phase A's global `renumber_problems` rewrites problem labels afterward, so the sub-agents don't need to count across chunks.
 
 ### Step 11 — fixup (mirror of `step_fixup()`)
 
@@ -240,8 +284,8 @@ $IN2'''.strip().splitlines()]; print('FRESH' if o.exists() and all(o.stat().st_m
 
 - Do NOT call `AIClient.generate()` — directly or via any helper that imports `ai_client`
 - Do NOT run `pipeline.py` — you ARE pipeline.py
-- Do NOT spawn `claude` as a subprocess
-- Do NOT chunk on size — bigger batches is the whole point
+- Do NOT spawn `claude` as a subprocess — use the Agent tool instead when you need parallel workers (see sub-agent patterns in steps 4, 5, 7, 9, 10)
+- Do NOT chunk on size for short inputs — below 800 lines, do the whole section in one pass. Chunk *only* when the source exceeds the step's threshold (see per-step notes), and prefer sub-agent parallelism over sequential chunk loops.
 - Do NOT pass `--provider`, `--model`, `--api-key` flags to any helper script (those routes go to AIClient)
 - Do NOT invoke the existing standalone `book-*` skills for AI steps — those describe external paths and would defeat the purpose. The orchestrator (this file) is self-contained.
 

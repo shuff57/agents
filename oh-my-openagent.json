@@ -2,13 +2,11 @@
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
   "agents": {
     "sisyphus": {
-      "model": "github-copilot/claude-sonnet-4.6",
-      "variant": "max",
+      "model": "anthropic/claude-sonnet-4-6",
       "prompt_append": "## Automatic Session Reflection\n\nAt the end of every conversation — when the user's work is done and they signal they are finished (e.g. 'thanks', 'done', 'that's all', 'goodbye', closing remarks) — automatically offer to save a session reflection WITHOUT being asked.\n\nUse the `session-reflector` skill workflow:\n1. Draft a ≤30-line reflection covering: what was done, patterns noticed, corrections received, suggestions.\n2. Ask the user (via `question` tool): \"Save these learnings to `.agents/memory/pending/`? [y/n/edit]\"\n3. On y: write `{YYYY-MM-DD}-{slug}.md` to `.agents/memory/pending/`.\n4. On n or no closing signal detected: skip silently.\n\nDo NOT wait to be asked. Do NOT skip this because the session felt routine. Every session has learnings worth capturing."
     },
     "oracle": {
-      "model": "github-copilot/claude-opus-4.6",
-      "variant": "max"
+      "model": "anthropic/claude-opus-4-7"
     },
     "explore": {
       "model": "ollama-cloud/kimi-k2.5"
@@ -18,18 +16,16 @@
       "variant": "max"
     },
     "prometheus": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "metis": {
-      "model": "github-copilot/claude-opus-4.6",
-      "variant": "max"
+      "model": "anthropic/claude-opus-4-7"
     },
     "momus": {
-      "model": "github-copilot/claude-sonnet-4.6",
-      "variant": "max"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "atlas": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "sisyphus-junior": {
       "model": "ollama-cloud/glm-5.1"
@@ -38,22 +34,22 @@
       "model": "ollama-cloud/qwen3-coder-next"
     },
     "planner": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "code-engineer": {
       "model": "ollama-cloud/glm-5.1"
     },
     "reviewer": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "critic": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "debugger": {
       "model": "ollama-cloud/glm-5.1"
     },
     "designer": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "qa-tester": {
       "model": "ollama-cloud/qwen3-coder-next"
@@ -62,7 +58,7 @@
       "model": "ollama-cloud/glm-5"
     },
     "red-team": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "documenter": {
       "model": "ollama-cloud/minimax-m2.7"
@@ -77,8 +73,7 @@
       "variant": "max"
     },
     "ultrabrain": {
-      "model": "github-copilot/claude-opus-4.6",
-      "variant": "max"
+      "model": "anthropic/claude-opus-4-7"
     },
     "quick": {
       "model": "ollama-cloud/qwen3-coder-next"
@@ -87,7 +82,7 @@
       "model": "ollama-cloud/qwen3-coder-next"
     },
     "unspecified-high": {
-      "model": "github-copilot/claude-sonnet-4.6"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "writing": {
       "model": "ollama-cloud/gemma4-31b-cloud"

@@ -82,6 +82,16 @@ Use the agent's file tools (`write_file`, `patch`) to make changes, then commit:
 
 Stage only the files from today's session — avoid committing unrelated drift:
 
+PITFALL: Never use `git add --force .` — it bypasses .gitignore and stages
+node_modules, build artifacts, and other ignored files. If you accidentally do
+this, unstage the ignored dirs before committing:
+
+  git rm -r --cached node_modules/ dist/ graphify-out/ _workspace/  # etc.
+  git diff --cached --name-only  # verify clean before committing
+
+Use `git add -A` (no --force) for normal staging. If files still won't stage,
+check .gitignore entries rather than using --force.
+
 ```bash
 # Stage individual files by exact path (safest)
 git add skills/new-skill/SKILL.md roster/new-agent.md roster/README.md

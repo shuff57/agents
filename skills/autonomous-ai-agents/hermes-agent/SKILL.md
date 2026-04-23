@@ -292,12 +292,41 @@ Type these during an interactive chat session.
 ```
 ~/.hermes/config.yaml       Main configuration
 ~/.hermes/.env              API keys and secrets
+~/.hermes/SOUL.md           Permanent system prompt identity (injected every session)
 ~/.hermes/skills/           Installed skills
 ~/.hermes/sessions/         Session transcripts
 ~/.hermes/logs/             Gateway and error logs
 ~/.hermes/auth.json         OAuth tokens and credential pools
 ~/.hermes/hermes-agent/     Source code (if git-installed)
 ```
+
+### SOUL.md — Global Default Behavior
+
+`~/.hermes/SOUL.md` is injected into the system prompt of EVERY session —
+CLI, gateway, cron, subagents. It is the correct place for:
+
+- Agent identity / persona
+- Always-on behavioral rules (e.g. communication style, tone)
+- Skills that should be active in every session by default
+
+**To make a skill always active**, append its body (strip YAML frontmatter) to SOUL.md:
+
+```bash
+# Strip frontmatter and append skill body
+python3 -c "
+import re
+content = open('~/.hermes/skills/creative/caveman/SKILL.md').read()
+body = re.sub(r'^---.*?---\s*', '', content, flags=re.DOTALL).strip()
+print(body)
+" >> ~/.hermes/SOUL.md
+```
+
+Or edit directly: `hermes config edit` won't open SOUL.md — use `$EDITOR ~/.hermes/SOUL.md`.
+
+SOUL.md vs `--skills` flag:
+- SOUL.md: always active, no flag needed, works everywhere including gateway/cron
+- `--skills caveman`: per-session, CLI only, requires the flag each launch
+- SOUL.md is preferred for skills you want on permanently
 
 Profiles use `~/.hermes/profiles/<name>/` with the same layout.
 

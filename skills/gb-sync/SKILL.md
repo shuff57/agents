@@ -50,6 +50,48 @@ description: Use when syncing student scores from MyOpenMath into Aeries after a
 2. Run Phases 1-4 to build `gb-sync-student-{name}.json` files and generate the dry-run report.
 3. After explicit approval, switch to live mode for Phases 5-7 and verify every written score.
 
+## Hooks (Standalone Mode)
+
+Skip this section if the invoking prompt indicates a pipeline-orchestrated run (e.g., `"Pipeline-orchestrated run: skip the standalone pre/post hooks"`) — the `gb-pipeline` orchestrator handles pre/post prompts in that case. Note: Phase 4's dry-run approval gate is part of the core workflow and always runs, regardless of mode.
+
+### Pre-Sync Hook
+- **INPUT:** User intent to run `gb-sync` standalone
+- **ACTION:** Call `AskUserQuestion` (mode):
+  - `question`: "Sync mode?"
+  - `header`: "Pre-Sync"
+  - `multiSelect`: false
+  - `options`:
+    - `label`: "Full sync — all matched assignments" · `description`: "Recommended."
+    - `label`: "Single-assignment sync" · `description`: "Only sync scores for one target assignment."
+    - `label`: "Cancel — tabs not ready or compare missing" · `description`: "Stop and resolve prerequisites first."
+- If "Single-assignment sync" chosen, follow-up `AskUserQuestion` (target):
+  - `question`: "Which target assignment should the sync run against?"
+  - `header`: "Target"
+  - `multiSelect`: false
+  - `options`: up to 4 assignment names from the compare JSON `matched` list, ordered by most recent due date (Other for a name not shown).
+- Record `syncMode` ∈ {`full`, `single`} and optional `targetAssignment`; pass both into Phase 1.
+- **OUTPUT:** Sync mode and optional target.
+
+### Post-Sync Hook
+- **INPUT:** Main sync cache + per-student files after Phase 7
+- **ACTION:** Ask only if halted or failed:
+  - If `pipelineHalted === true`:
+    - `question`: "Sync halted: {haltReason}. What next?"
+    - `header`: "Post-Sync"
+    - `multiSelect`: false
+    - `options`:
+      - `label`: "Stop and let me review" · `description`: "Recommended."
+      - `label`: "Retry from saved progress" · `description`: "Re-run Phases 5-7; resume from `syncProgress.completedStudents`."
+  - If any student file is `verify-failed`, `error`, `filled`, or `pending`:
+    - `question`: "{X} student files show failures or pending state. What next?"
+    - `header`: "Post-Sync"
+    - `multiSelect`: false
+    - `options`:
+      - `label`: "Stop and let me review" · `description`: "Recommended."
+      - `label`: "Retry verification from saved progress" · `description`: "Re-run Phase 7 using saved temp files."
+- If all `verified` (full mode) or all `partial-verified` (single mode), skip the question and just report completion.
+- **OUTPUT:** Terminal state (verified / partial / halted) or a retry.
+
 ## Workflow
 
 ### Phase 1: Setup

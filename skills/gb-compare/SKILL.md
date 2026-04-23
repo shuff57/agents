@@ -52,6 +52,35 @@ description: Use when comparing MyOpenMath gradebook assignments against an Aeri
 2. Extract MOM categories, assignments, and optional dates; extract Aeries assignment headers.
 3. Match, report, and write `gb_compare_{gradebookNum}.json` for the next stage.
 
+## Hooks (Standalone Mode)
+
+Skip this section if the invoking prompt indicates a pipeline-orchestrated run (e.g., `"Pipeline-orchestrated run: skip the standalone pre/post hooks"`) — the `gb-pipeline` orchestrator handles pre/post prompts in that case.
+
+### Pre-Compare Hook
+- **INPUT:** User intent to run `gb-compare` standalone
+- **ACTION:** Call `AskUserQuestion`:
+  - `question`: "Pre-compare: are both tabs open, and should I fetch optional MOM assigned/due dates?"
+  - `header`: "Pre-Cmp"
+  - `multiSelect`: false
+  - `options`:
+    - `label`: "Both tabs open; fetch dates" · `description`: "Recommended. Runs Phase 3 for assigned/due date enrichment."
+    - `label`: "Both tabs open; skip dates" · `description`: "Faster — JSON dates stay null and markdown shows '—'."
+    - `label`: "Cancel — tabs not ready" · `description`: "Stop so I can open the required tabs."
+- If "Cancel", exit cleanly. Otherwise record `fetchDates` ∈ {true, false} and apply in Phase 3.
+- **OUTPUT:** Ready flag + `fetchDates` choice.
+
+### Post-Compare Hook
+- **INPUT:** `grade-cloning/temp/gb_compare_{gradebookNum}.json` already written
+- **ACTION:** Call `AskUserQuestion`:
+  - `question`: "Compare complete: {N} missing, {M} matched. What next?"
+  - `header`: "Post-Cmp"
+  - `multiSelect`: false
+  - `options`:
+    - `label`: "Stop — I just wanted the report" · `description`: "Recommended. Keep the report + temp JSON; exit."
+    - `label`: "Suggest a follow-up skill" · `description`: "Print one line recommending `gb-new-assignment` (if missing > 0) or `gb-sync`."
+- Route: stop → exit; suggest → print the recommendation, then exit.
+- **OUTPUT:** Terminal state.
+
 ## Workflow
 
 ### Phase 1: Session Setup and Tab Detection

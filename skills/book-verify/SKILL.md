@@ -31,6 +31,29 @@ disable-model-invocation: true
 > - Report PASS if any CRITICAL check fails
 > - Modify the HTML file during verification (report only)
 
+## Pipeline Integration (Automated)
+
+As of commit 353a894, verification is automated inside `pipeline.py`:
+
+- `_verify_html(html: str) -> (hard_fail, critical, warnings)` — pure function, 7 phases
+- `step_verify(ctx, args, progress_base)` — pipeline step with:
+  - Idempotency via `<section>.verify_ok` stamp file (skips if stamp newer than html_file)
+  - Hard-fail: polyfill.io, bare `<details>` missing `class="solution"`, missing `<body>`,
+    HTML < 500 chars, unfilled `{content}`/`{title}` placeholders
+  - Soft warnings: structure, nav, content classes, MathJax/jsdelivr
+  - Writes `.verify_ok` stamp on clean pass (publish step checks for this stamp)
+- `step_publish` warns if stamp absent but does NOT block publish
+
+**To run verify step standalone:**
+```bash
+python scripts/workflows/pipeline.py --project "Applied Finite Math" --section "1.1" --steps verify
+```
+
+**Tests:** `tests/test_step_verify_publish.py` (16 tests)
+
+Use the manual checklist below when auditing HTML files outside the pipeline,
+or when the automated step reports failures and you need line numbers.
+
 ## Quick Start
 1. Read the HTML file
 2. Run through all checklist items
@@ -83,6 +106,10 @@ grep -n "polyfill.io" "{file.html}"
 - **ACTION:** Verify ALL `<details>` elements have `class="solution"`:
 ```bash
 grep -n "<details>" "{file.html}" | grep -v 'class="solution"'
+```
+Python equivalent (used in `_verify_html`):
+```python
+bare = re.findall(r'<details(?!\s+class=["\']solution["\'])[^>]*>', html, re.IGNORECASE)
 ```
   - Each `<details class="solution">` must contain `<summary>`
   - Solution content in `<div class="solution-content">`

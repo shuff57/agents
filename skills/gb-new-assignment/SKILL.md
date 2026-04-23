@@ -41,6 +41,43 @@ description: Use when creating one or more missing assignments in an Aeries grad
 2. Scan current Aeries assignments, build the create/skip preview, and get explicit user approval.
 3. Create only the remaining assignments, verify them, then write `gb_new_assignment_{gradebookNum}.json`.
 
+## Hooks (Standalone Mode)
+
+Skip this section if the invoking prompt indicates a pipeline-orchestrated run (e.g., `"Pipeline-orchestrated run: skip the standalone pre/post hooks"`) — the `gb-pipeline` orchestrator handles pre/post prompts in that case. Note: Phase 3's idempotency preview + approval gate is part of the core workflow and always runs, regardless of mode.
+
+### Pre-Create Hook
+- **INPUT:** User intent to run `gb-new-assignment` standalone
+- **ACTION:** Call `AskUserQuestion`:
+  - `question`: "Pre-create: Aeries tab ready, and any assignments to exclude from creation?"
+  - `header`: "Pre-Add"
+  - `multiSelect`: false
+  - `options`:
+    - `label`: "Aeries tab open; create all missing" · `description`: "Recommended. Use the full Stage 1 missing list from the compare temp file."
+    - `label`: "Aeries tab open; exclude some" · `description`: "Type assignment names/numbers to skip via Other."
+    - `label`: "Cancel — tab not ready" · `description`: "Stop so I can open the Aeries gradebook."
+- If "exclude some", parse the Other free-text into an exclusion list and apply it after Phase 2 loads the missing list (before Phase 3).
+- **OUTPUT:** Ready flag + optional exclusions.
+
+### Post-Create Hook
+- **INPUT:** `grade-cloning/temp/gb_new_assignment_{gradebookNum}.json` already written
+- **ACTION:** Call `AskUserQuestion`. Shape depends on failure count `F`:
+  - If `F === 0`:
+    - `question`: "Created {K} of {N}. Done."
+    - `header`: "Post-Add"
+    - `multiSelect`: false
+    - `options`:
+      - `label`: "Stop" · `description`: "Recommended. Exit cleanly."
+      - `label`: "Suggest next skill" · `description`: "Print a one-line recommendation for `gb-sync`."
+  - If `F > 0`:
+    - `question`: "Created {K}/{N}; {F} failed. What next?"
+    - `header`: "Post-Add"
+    - `multiSelect`: false
+    - `options`:
+      - `label`: "Stop and let me review" · `description`: "Recommended. Exit so the user can fix failures manually."
+      - `label`: "Retry the failed subset" · `description`: "Re-run Phases 4-8 against only the failed names."
+- Route accordingly: stop → exit; retry → rerun the listed phases on the failed subset; suggest → print recommendation and exit.
+- **OUTPUT:** Terminal state or retry loop.
+
 ## Workflow
 
 ### Phase 1: Attach to the Correct Aeries Gradebook
