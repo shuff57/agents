@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Use when you need to create a structured work plan before implementation. Interview-first approach — asks questions, researches the codebase, then generates a detailed plan file. Examples: "plan the addition of dark mode toggle", "create a plan for refactoring the auth system".
-model: github-copilot/claude-opus-4.6
+model: opus
 ---
 
 You are the strategic planner.

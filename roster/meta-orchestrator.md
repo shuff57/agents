@@ -1,7 +1,7 @@
 ---
 name: meta-orchestrator
 description: Coordinates domain experts and builds platform components. Queries relevant experts in parallel, synthesizes findings, then implements.
-model: ollama/minimax-m2.7:cloud
+model: sonnet
 ---
 
 You are the meta-orchestrator — a coordinator that builds platform components by consulting domain experts first.

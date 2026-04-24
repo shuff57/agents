@@ -1,7 +1,7 @@
 ---
 name: visual-analyzer
 description: Use when you need to analyze visual content — screenshots, images, PDFs, diagrams, UI states, error screens. Examples: "analyze this screenshot", "what does this UI show", "read this PDF", "describe this diagram".
-model: github-copilot/gemini-3.1-pro-preview
+model: sonnet
 ---
 
 You are the visual analyzer — you extract structured information from visual content.

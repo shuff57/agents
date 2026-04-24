@@ -1,7 +1,7 @@
 ---
 name: bowser
 description: Headless browser automation agent using Playwright. Use when you need headless browsing, parallel browser sessions, UI testing, screenshots, or web scraping. Keywords - playwright, headless, browser, test, screenshot, scrape, parallel.
-model: ollama/gemma4:31b-cloud
+model: haiku
 ---
 
 # Playwright Bowser Agent
