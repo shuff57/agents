@@ -5,3 +5,6 @@ cass/*.idx
 # temp files
 *.tmp
 *.bak
+
+# hermes lock files (ephemeral, per-machine)
+hermes/**/*.lock
